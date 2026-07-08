@@ -1,0 +1,3 @@
+**Electronic Devices** – Electronic devices are **physical hardware systems that use electrical energy to process, control, or transmit information using electronic components like semiconductors, circuits, and integrated systems**.
+
+In short, Electronic devices are physical systems that use electrical energy and electronic components to process information, control operations, and perform useful tasks.

@@ -1,0 +1,3 @@
+**[[Caching]]** – Caching refers to the **process of storing frequently accessed data in a fast, temporary storage layer so it can be retrieved more quickly than fetching it from the original source**. It is used to reduce latency, improve system performance, and decrease repeated computation or data retrieval from slower storage systems.
+
+In short, caching is a performance optimization technique that stores frequently used data in fast temporary storage to reduce access time and improve system efficiency.

@@ -1,0 +1,239 @@
+{
+  "main": {
+    "id": "4f3be4c9a48e7fb3",
+    "type": "split",
+    "children": [
+      {
+        "id": "ec39d8c3f05272fb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "04736a318a55d8ab",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Escaping Special Characters.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Escaping Special Characters"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fa02f31521e8f8ed",
+    "type": "split",
+    "children": [
+      {
+        "id": "76c8d8783ff2cb4b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "9502b5033dfa070e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "d706b62b116d03b3",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          },
+          {
+            "id": "b01351545322bcbe",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          }
+        ],
+        "currentTab": 2
+      }
+    ],
+    "direction": "horizontal",
+    "width": 238.5
+  },
+  "right": {
+    "id": "fd3a06c5e0fb9d8d",
+    "type": "split",
+    "children": [
+      {
+        "id": "8bd37a3410fcb4f7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e464fe697e6e9102",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": true,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "5ff4e92de95a65dc",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Obsidian Vault/Asymptotic Analysis.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Asymptotic Analysis"
+            }
+          },
+          {
+            "id": "8f6ac2c5771c50e5",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "0e5b6b037101d994",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "530228ff0284b979",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Obsidian Vault/Asymptotic Analysis.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Asymptotic Analysis"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false,
+      "iconic:Open rulebook": false
+    }
+  },
+  "active": "04736a318a55d8ab",
+  "lastOpenFiles": [
+    "ETL Process.md",
+    "ETL.md",
+    "Escaping Special Characters.md",
+    "Networking/Ethernet.md",
+    "Programming/Error Handling.md",
+    "Architecture/Entity Relationship Diagram.md",
+    "Systems/Audio Drivers.md",
+    "Systems/Enterprise Computing.md",
+    "History/ENIAC.md",
+    "Data/Encryption.md",
+    "Data/Encode.md",
+    "Systems/Embedded Operating System.md",
+    "Embedded System.md",
+    "Programming/Else statements.md",
+    "If Statement.md",
+    "Hardware/Electronic Devices.md",
+    "Hardware/Diode.md",
+    "Systems/Control Systems.md",
+    "Architecture/Computer Architecture.md",
+    "Hardware/Amplifier.md",
+    "Hardware/Amplifier Circuits.md",
+    "Hardware/Analog Circuit.md",
+    "Sensor Systems.md",
+    "Sensor Circuits.md",
+    "Hardware/Capacitor.md",
+    "Power Supply Circuits.md",
+    "Untitled.base",
+    "+/Pasted image 20260625154058.png",
+    "+/Pasted image 20260623235217.png",
+    "+/Pasted image 20260623232157.png",
+    "+/Pasted image 20260623220022.png",
+    "Cloud",
+    "Security",
+    "Programming",
+    "Systems",
+    "Data",
+    "AI",
+    "History",
+    "Architecture",
+    "Networking",
+    "+/Pasted image 20260622220317.png",
+    "+/Pasted image 20260622220254.png",
+    "+/Pasted image 20260622215638.png",
+    "+/Pasted image 20260622194801.png",
+    "+/Pasted image 20260622192854.png",
+    "+/Pasted image 20260622191526.png",
+    "Untitled.canvas",
+    "Untitled 2.canvas",
+    "Untitled 1.canvas"
+  ]
+}

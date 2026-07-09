@@ -592,9 +592,9 @@ def _attach_grounding_fields(question: dict, correct_text: str, supporting_fact:
             context=question['supporting_fact'],
             facts=[{'supporting_fact': question['supporting_fact']}]
         )
-        if explanation:
+        if explanation and not question.get('explanation'):
             question['explanation'] = explanation
-            return True
+        return True
     
     # Fallback: create a simple grounded explanation
     if correct_text and question['supporting_fact']:
@@ -650,7 +650,7 @@ def _select_supporting_fact(correct_text: str, supporting_facts: list = None,
 # ============ QUIZ GENERATOR CLASS ============
 
 class QuizGenerator:
-    def __init__(self, model: str = "deepseek-r1:1.5b", min_quality_score: float = 0.6):
+    def __init__(self, model: str = "qwen2.5:3b", min_quality_score: float = 0.6):
         self.model = model
         self.cache = QuestionCache()
         self.scorer = QuestionScorer()
@@ -662,11 +662,12 @@ class QuizGenerator:
         if facts is None:
             facts = []
         
-        is_acceptable, score, scores = self.scorer.is_acceptable(question, facts)
+        is_acceptable, score, scores, issues = self.scorer.is_acceptable(question, facts)
         
         if not is_acceptable:
             print(f"⚠️ Quality check failed: score={score:.2f} (threshold={self.min_quality_score})")
             print(f"   Scores: {scores}")
+            print(f"   Issues: {issues}")
         else:
             print(f"✅ Quality check passed: score={score:.2f}")
         
@@ -687,6 +688,9 @@ class QuizGenerator:
         
         if len(concept.split()) >= 2:
             return True
+
+        if concept.lower() in ["database", "cloud", "algorithm", "programming"]:
+            return False
         
         if concept[0].isupper() and len(concept) > 2:
             return True
@@ -978,18 +982,28 @@ TOPIC: {topic}
 CONTENT: {context}
 
 Requirements:
-1. Question must end with "?"
-2. Correct field must be "A", "B", "C", or "D"
-3. Answer must come from the content
-4. Explanation must reference the content
-5. Return ONLY valid JSON
+1. The question field must be an actual question, not a statement.
+2. The question field must use question wording (What, Why, How, Which, When).
+3. The question field MUST end with "?". Nothing may appear after the question mark.
+4. Never put A), B), C), or D) inside the question field.
+5. You MUST generate exactly 4 options separately.
+6. Options MUST be formatted:
+   ["A) Option", "B) Option", "C) Option", "D) Option"]
+7. Correct field must only contain A, B, C, or D.
+8. Explanation must reference the content.
+9. Return ONLY valid JSON.
 
 Example:
 {{
-  "question": "Your question here",
-  "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+  "question": "What does database normalization reduce?",
+  "options": [
+    "A) Redundancy",
+    "B) Processing speed",
+    "C) File size",
+    "D) Network traffic"
+  ],
   "correct": "A",
-  "explanation": "Explanation of why A is correct."
+  "explanation": "Redundancy is correct because database normalization reduces duplicate data."
 }}
 
 Generate 1 question now:"""
@@ -999,14 +1013,20 @@ Generate 1 question now:"""
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 options={
-                    "temperature": 0.3,
-                    "top_p": 0.8,
-                    "num_predict": 1200
+                    "temperature":0.2,
+                    "top_p":0.8,
+                    "num_predict":2000,
+                    "stop":["```"]
                 }
-            )
+)
             
             content = response['message']['content']
-            print(f"Ollama response received: {len(content)} characters")
+
+            print("RAW RESPONSE:")
+            print(response)
+
+            print(f"CONTENT LENGTH: {len(content)}")
+            print(content)  
             
             json_match = re.search(r'\{[\s\S]*\}', content)
             if not json_match:
@@ -1030,24 +1050,63 @@ Generate 1 question now:"""
             
             if 'questions' not in result:
                 if isinstance(result, dict) and 'question' in result:
+
+                    # Repair missing options from bad LLM output
+                    if 'options' not in result:
+                        print("⚠️ LLM forgot options, rejecting question")
+                        return {"questions": []}
+
                     result = {"questions": [result]}
+
                 else:
                     return {"questions": []}
             
             valid_questions = []
+
             for q in result['questions']:
+
                 if 'options' in q and len(q['options']) == 4:
-                    options_text = ' '.join(q['options']).lower()
+
+                    # Normalize options first
+                    q['options'] = normalize_options(q['options'])
+
+                   # Reject statements pretending to be questions
+                    if 'question' in q:
+                        if not q['question'].strip().endswith('?'):
+                            print("⚠️ LLM generated statement instead of question")
+                            continue 
+
+                    # Remove leaked options from question text
+                    if 'question' in q:
+                        q['question'] = re.split(
+                            r'\s*\[A\)',
+                            q['question'],
+                            flags=re.IGNORECASE
+                        )[0].strip()         
+
+                    options_text = ' '.join(
+                        str(opt)
+                        for opt in q['options']
+                    ).lower()
+
                     if 'correct answer' in options_text or 'wrong answer' in options_text:
                         print("Skipping placeholder question")
                         continue
                     
-                    q['options'] = normalize_options(q['options'])
-                    
                     # Stage 1: Structure
                     if not validate_structure(q):
-                        print(f"⚠️ Skipping malformed question")
-                        continue
+
+                        # Attempt question repair
+                        q_text = q.get("question", "").strip()
+
+                        if q_text and not q_text.endswith("?"):
+                            q["question"] = f"What is true about: {q_text}?"
+
+                            print("🔧 Repaired question format")
+
+                        if not validate_structure(q):
+                            print(f"⚠️ Skipping malformed question")
+                            continue
                     
                     # Stage 2: Content - Grounding
                     if not validate_grounding(q, context):
@@ -1147,7 +1206,8 @@ Generate 1 question now:"""
             return {"questions": valid_questions}
             
         except Exception as e:
-            print(f"Error generating quiz: {e}")
+            import traceback
+            traceback.print_exc()
             return {"questions": []}
 
     def generate_fill_blank(self, context: str, topic: str) -> Dict[str, Any]:
@@ -1250,7 +1310,17 @@ Generate 1 fill-in-the-blank question now:"""
 
 
 if __name__ == "__main__":
-    context = "Database normalization reduces redundancy. 1NF requires atomic values."
+    context = """
+    Database normalization reduces redundancy.
+    First Normal Form requires atomic values.
+    """
+
     gen = QuizGenerator()
-    result = gen.generate_questions(context, "Database", count=1)
+
+    result = gen.generate_questions(
+        context,
+        "Database",
+        count=5
+    )
+
     print(json.dumps(result, indent=2))

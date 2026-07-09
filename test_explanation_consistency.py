@@ -1,4 +1,4 @@
-from app.quiz_generator import validate_semantic
+from app.quiz.quiz_generator import validate_semantic
 
 
 def test_rejects_explanation_for_wrong_option():

@@ -1,7 +1,7 @@
 ﻿# utils/__init__.py
 """Utility functions for the AI Study Companion."""
 
-from .options_parser import (
+from ..quiz.options_parser import (
     extract_option_text,
     extract_option_letter,
     format_option,

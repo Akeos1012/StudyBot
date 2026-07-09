@@ -1,5 +1,5 @@
-from app.fact_extractor import FactExtractor
-from app.metadata_loader import MetadataLoader
+from app.rag.fact_extractor import FactExtractor
+from app.rag.metadata_loader import MetadataLoader
 
 loader = MetadataLoader()
 loader.load_metadata()

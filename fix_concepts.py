@@ -1,9 +1,9 @@
 ﻿# fix_concepts.py
-from app.fact_cache import FactCache
+from app.rag.fact_cache import FactCache
 import re
 
 def clean_concept(concept):
-    \"\"\"Clean up concept names\"\"\"
+    "\"\"\"Clean up concept names\"\"\"
     # Remove leading numbers like "4. "
     concept = re.sub(r'^\d+\.\s+', '', concept)
     # Remove extra spaces

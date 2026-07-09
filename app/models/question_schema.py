@@ -1,0 +1,177 @@
+"""
+Unified Question Schema Contract
+All questions must follow this structure.
+
+This module provides:
+- Schema definition for questions
+- Validation logic with detailed error reporting
+- Type checking for all fields
+- Normalization of the correct answer field
+"""
+
+from typing import List, Dict, Any, Optional, Type, Union
+
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+
+# ===== Schema Field Definitions =====
+REQUIRED_FIELDS = ["question", "options", "correct", "explanation"]
+OPTIONAL_FIELDS = ["_is_fallback", "source_notes", "concept_type", "difficulty"]
+
+# ===== Field Type Mappings =====
+FIELD_TYPES: Dict[str, Union[Type, List[Type]]] = {
+    "question": str,
+    "options": list,
+    "correct": str,
+    "explanation": str,
+    "_is_fallback": bool,
+    "source_notes": list,
+    "concept_type": str,
+    "difficulty": float,
+}
+
+# ===== Validation Constants =====
+VALID_OPTIONS_COUNT = 4
+VALID_CORRECT_LETTERS = {"A", "B", "C", "D"}
+
+# ===== Error Messages =====
+ERROR_MISSING_REQUIRED = "Missing required field: {field}"
+ERROR_EMPTY_FIELD = "Empty field: {field}"
+ERROR_INVALID_OPTIONS_COUNT = "Must have exactly 4 options, got {count}"
+ERROR_INVALID_CORRECT = "Correct must be A-D, got: {value}"
+ERROR_WRONG_TYPE = "Field '{field}' must be of type {expected_type}, got {actual_type}"
+ERROR_OPTION_EMPTY = "Option at index {index} is empty or contains only whitespace"
+
+
+# ============================================================================
+# INTERNAL HELPERS
+# ============================================================================
+
+def _normalize_correct(correct: Any) -> str:
+    """Normalize the correct answer to uppercase, stripped."""
+    return str(correct).strip().upper()
+
+
+def _get_field_type(field_name: str) -> Optional[Union[Type, List[Type]]]:
+    """Get the expected type for a field."""
+    return FIELD_TYPES.get(field_name)
+
+
+def _validate_field_type(value: Any, field_name: str) -> bool:
+    """Validate that a value matches its expected type."""
+    expected_type = _get_field_type(field_name)
+    if expected_type is None:
+        return True  # Unknown fields are allowed
+    return isinstance(value, expected_type)
+
+
+def _validate_options(options: Any) -> bool:
+    """Validate the options field."""
+    if not isinstance(options, list):
+        return False
+    
+    if len(options) != VALID_OPTIONS_COUNT:
+        print(ERROR_INVALID_OPTIONS_COUNT.format(count=len(options)))
+        return False
+    
+    for i, opt in enumerate(options):
+        if not isinstance(opt, str):
+            return False
+        if not opt.strip():
+            print(ERROR_OPTION_EMPTY.format(index=i))
+            return False
+    
+    return True
+
+
+def _validate_correct(correct: Any) -> bool:
+    """Validate the correct field."""
+    normalized = _normalize_correct(correct)
+    if normalized not in VALID_CORRECT_LETTERS:
+        print(ERROR_INVALID_CORRECT.format(value=correct))
+        return False
+    return True
+
+
+def _validate_required_fields(question: Dict[str, Any]) -> bool:
+    """Validate that all required fields are present and non-empty."""
+    for field in REQUIRED_FIELDS:
+        if field not in question:
+            print(ERROR_MISSING_REQUIRED.format(field=field))
+            return False
+        
+        value = question.get(field)
+        if not value or not str(value).strip():
+            print(ERROR_EMPTY_FIELD.format(field=field))
+            return False
+    
+    return True
+
+
+def _validate_optional_fields(question: Dict[str, Any]) -> bool:
+    """Validate optional fields if present."""
+    for field in OPTIONAL_FIELDS:
+        if field in question:
+            if not _validate_field_type(question[field], field):
+                expected = _get_field_type(field)
+                actual = type(question[field]).__name__
+                print(ERROR_WRONG_TYPE.format(
+                    field=field,
+                    expected_type=expected.__name__ if expected else "unknown",
+                    actual_type=actual
+                ))
+                return False
+    
+    return True
+
+
+# ============================================================================
+# PUBLIC API
+# ============================================================================
+
+QUESTION_SCHEMA = {
+    "required": REQUIRED_FIELDS,
+    "optional": OPTIONAL_FIELDS,
+    "types": FIELD_TYPES,
+}
+
+
+def validate_question_schema(question: Dict[str, Any]) -> bool:
+    """
+    Validate a question against the schema.
+    
+    Args:
+        question: Dictionary containing the question data
+        
+    Returns:
+        True if valid, False otherwise with error messages printed
+    
+    Validation checks:
+        1. All required fields are present and non-empty
+        2. Optional fields have correct types if present
+        3. Options is a list of exactly 4 non-empty strings
+        4. Correct is one of A, B, C, D (case-insensitive)
+        5. All string fields contain non-whitespace content
+    """
+    # Step 1: Validate required fields
+    if not _validate_required_fields(question):
+        return False
+    
+    # Step 2: Validate field types for optional fields
+    if not _validate_optional_fields(question):
+        return False
+    
+    # Step 3: Validate options
+    if not _validate_options(question.get("options", [])):
+        return False
+    
+    # Step 4: Validate correct field (will be normalized after validation)
+    if not _validate_correct(question.get("correct", "")):
+        return False
+    
+    # Step 5: Normalize the correct field in place
+    question["correct"] = _normalize_correct(question["correct"])
+    
+    return True

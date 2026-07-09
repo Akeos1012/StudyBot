@@ -5,9 +5,9 @@ from typing import List, Dict, Any
 try:
     from .fact_extractor import FactExtractor
 except ImportError:
-    from fact_extractor import FactExtractor
+    from app.rag.fact_extractor import FactExtractor
 
-from .schema import validate_fact, normalize_fact
+from ..models.fact_schema import validate_fact, normalize_fact
 
 class FactCache:
     def __init__(self, notes_path="sample_notes", cache_path="facts_cache.json"):

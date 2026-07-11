@@ -611,40 +611,72 @@ def _attach_grounding_fields(question: dict, correct_text: str, supporting_fact:
 def _select_supporting_fact(correct_text: str, supporting_facts: list = None,
                             fallback_context: str = "") -> str:
     """Pick the strongest note-backed supporting sentence for a question."""
-    if not supporting_facts:
-        return normalize_supporting_fact(fallback_context or "")
 
-    if isinstance(supporting_facts, str):
-        return normalize_supporting_fact(supporting_facts)
+    candidates = []
 
-    correct_words = [w for w in re.split(r'[^a-z0-9]+', (correct_text or '').lower()) if len(w) > 2]
-    
-    for fact in supporting_facts:
-        if isinstance(fact, dict):
-            candidate = fact.get('supporting_fact') or fact.get('sentence') or fact.get('definition') or ""
-        else:
-            candidate = str(fact)
-        if not candidate:
-            continue
-        candidate = normalize_supporting_fact(candidate)
-        if not candidate:
-            continue
+    if supporting_facts:
+        for fact in supporting_facts:
+            if isinstance(fact, dict):
+                candidate = (
+                    fact.get('supporting_fact')
+                    or fact.get('sentence')
+                    or fact.get('definition')
+                    or ""
+                )
+            else:
+                candidate = str(fact)
+
+            cleaned = normalize_supporting_fact(candidate)
+
+            if cleaned:
+                candidates.append(cleaned)
+
+    if fallback_context:
+        sentences = re.split(r'[.!?\n]+', fallback_context)
+
+        for sentence in sentences:
+            cleaned = normalize_supporting_fact(sentence)
+
+            if cleaned:
+                candidates.append(cleaned)
+
+
+    if not candidates:
+        return ""
+
+
+    correct_words = [
+        w.lower()
+        for w in re.findall(r'\w+', correct_text)
+        if len(w) > 2
+    ]
+
+
+    best_candidate = ""
+    best_score = 0
+
+
+    for candidate in candidates:
+
         candidate_lower = candidate.lower()
-        if correct_text and correct_text.lower() in candidate_lower:
-            return candidate
-        if correct_words and any(word in candidate_lower for word in correct_words):
-            return candidate
 
-    for fact in supporting_facts:
-        if isinstance(fact, dict):
-            candidate = fact.get('supporting_fact') or fact.get('sentence') or fact.get('definition') or ""
-        else:
-            candidate = str(fact)
-        candidate = normalize_supporting_fact(candidate)
-        if candidate:
-            return candidate
+        score = 0
 
-    return normalize_supporting_fact(fallback_context or "")
+        for word in correct_words:
+            if word in candidate_lower:
+                score += 1
+
+
+        if correct_text.lower() in candidate_lower:
+            score += 5
+
+
+        if score > best_score:
+            best_score = score
+            best_candidate = candidate
+
+
+    return best_candidate or candidates[0]
 
 
 # ============ QUIZ GENERATOR CLASS ============
@@ -852,7 +884,7 @@ Example output:
   "explanation": "Cloud Database is correct because it provides database services over the Internet."
 }}
 
-Generate 1 question now:"""
+Generate 5 different questions now:"""
 
         try:
             response = ollama.chat(
@@ -995,15 +1027,19 @@ Requirements:
 
 Example:
 {{
-  "question": "What does database normalization reduce?",
-  "options": [
-    "A) Redundancy",
-    "B) Processing speed",
-    "C) File size",
-    "D) Network traffic"
-  ],
-  "correct": "A",
-  "explanation": "Redundancy is correct because database normalization reduces duplicate data."
+  "questions": [
+    {{
+      "question": "What does database normalization reduce?",
+      "options": [
+        "A) Redundancy",
+        "B) Processing speed",
+        "C) File size",
+        "D) Network traffic"
+      ],
+      "correct": "A",
+      "explanation": "Redundancy is correct because database normalization reduces duplicate data."
+    }}
+  ]
 }}
 
 Generate 1 question now:"""
@@ -1311,15 +1347,18 @@ Generate 1 fill-in-the-blank question now:"""
 
 if __name__ == "__main__":
     context = """
-    Database normalization reduces redundancy.
-    First Normal Form requires atomic values.
+    Cloud computing provides computing resources over the internet.
+    Cloud storage allows users to store files remotely.
+    Virtual machines create virtualized computing environments.
+    Object storage stores data as objects instead of traditional files.
+    Cloud databases provide managed database services through cloud platforms.
     """
 
     gen = QuizGenerator()
 
     result = gen.generate_questions(
         context,
-        "Database",
+        "Cloud Computing",
         count=5
     )
 

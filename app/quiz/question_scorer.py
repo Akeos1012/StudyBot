@@ -19,7 +19,6 @@ This module does NOT:
 
 import logging
 from typing import Dict, List, Any, Tuple, Optional
-from collections import Counter
 
 from .options_parser import (
     extract_option_text,

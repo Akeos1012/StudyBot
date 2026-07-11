@@ -1,26 +1,40 @@
 import ollama
 import json
 import re
-from difflib import SequenceMatcher
+
 from json_repair import repair_json
 from typing import List, Dict, Any, Optional, Tuple
 
 from .question_cache import QuestionCache
 from .question_scorer import QuestionScorer
-from .question_validator import is_valid_question
 from .question_similarity import is_similar_to_pool
 
-# Import centralized option parser
-from .options_parser import (
-    extract_option_text,
-    extract_option_letter,
-    format_option,
-    get_correct_text_from_options,
-    get_distractor_texts,
-    normalize_options,
-    validate_options_format
+from .question_semantic import (
+    validate_semantic,
+    has_garbled_text,
 )
 
+from .validation_logger import log_validation_failure
+
+from .question_constants import (
+    MAX_QUESTION_LENGTH,
+    MIN_SUPPORTING_WORDS,
+)
+
+from .options_parser import (
+    normalize_options,
+    extract_option_letter,
+    extract_option_text,
+    get_correct_text_from_options,
+)
+
+from .question_grounding import (
+    validate_grounding,
+    normalize_supporting_fact,
+    attach_grounding_fields,
+    select_supporting_fact,
+    question_equals_answer,
+)
 
 # ============ CONSTANTS ============
 
@@ -75,63 +89,8 @@ INVALID_CONCEPT_WORDS = {
     'module'
 }
 
-# Stop words for grounding validation
-STOP_WORDS = {
-    'the', 'this', 'that', 'with', 'from', 'have', 'will', 'they',
-    'what', 'when', 'where', 'which', 'their', 'there', 'about',
-    'concept', 'using', 'used', 'also', 'can', 'for', 'are', 'has'
-}
-
-# Generic explanation phrases that indicate weak explanations
-GENERIC_PHRASES = [
-    "the correct answer is",
-    "because it is the correct answer",
-    "because it is correct",
-    "this option is correct",
-    "this answer is correct",
-    "the answer is"
-]
-
-# Maximum lengths
-MAX_QUESTION_LENGTH = 250
-MAX_EXPLANATION_WORDS = 24
-MAX_SUPPORTING_WORDS = 24
-MIN_SUPPORTING_WORDS = 3
-
-
 # ============ UTILITY FUNCTIONS ============
 
-def has_garbled_text(text: str) -> bool:
-    """Check if text contains non-printable or control characters."""
-    if not isinstance(text, str):
-        return True
-    return bool(re.search(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]', text))
-
-
-def normalize_supporting_fact(text: str) -> str:
-    """Turn a raw note fragment into a short atomic supporting fact."""
-    if not text:
-        return ""
-
-    cleaned = str(text).strip()
-    cleaned = re.sub(r'^\s*#+\s*', '', cleaned)
-    cleaned = re.sub(r'^\s*[-*+]\s*', '', cleaned)
-    cleaned = re.sub(r'^\s*\d+\.\s*', '', cleaned)
-    cleaned = re.sub(r'\[\[(.*?)\]\]', r'\1', cleaned)
-    cleaned = re.sub(r'[*_`>#]', '', cleaned)
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-    cleaned = cleaned.rstrip(' .')
-
-    if not cleaned:
-        return ""
-    if any(marker in cleaned.lower() for marker in ['#', '[[', ']]', '---', 'http', 'https']):
-        return ""
-    if len(cleaned.split()) > MAX_SUPPORTING_WORDS:
-        cleaned = ' '.join(cleaned.split()[:MAX_SUPPORTING_WORDS]).rstrip(' .')
-    if cleaned.lower().startswith(('how ', 'why ', 'what ', 'when ', 'where ',
-                                    'conclusion', 'summary', 'overview', 'references')):
-        return ""
-    return cleaned
 
 
 def filter_similar_questions(questions: List[Dict[str, Any]], threshold: float = 0.6) -> List[Dict[str, Any]]:
@@ -158,22 +117,6 @@ def filter_similar_questions(questions: List[Dict[str, Any]], threshold: float =
             seen_answers.add(correct_text)
     
     return unique
-
-
-def log_validation_failure(question: dict, stage: str, reason: str, details: dict = None):
-    """Log detailed validation failures for debugging."""
-    print(f"\n❌ VALIDATION FAILED at stage: {stage}")
-    print(f"   Reason: {reason}")
-    
-    if details:
-        for key, value in details.items():
-            print(f"   {key}: {value}")
-    
-    if question:
-        print(f"   Question preview: {question.get('question', 'N/A')[:80]}...")
-        print(f"   Options: {question.get('options', 'N/A')}")
-        print(f"   Correct: {question.get('correct', 'N/A')}")
-        print(f"   Concept: {question.get('concept', 'N/A') or question.get('correct_text', 'N/A')}")
 
 
 # ============ LAYER PHRASE FILTERING ============
@@ -204,71 +147,108 @@ def sanitize_supporting_fact(supporting_fact: str, concept: str) -> Optional[str
 
 # ============ TOPIC RELEVANCE ============
 
-def is_relevant_to_topic(question: str, topic: str, answer: str = "", supporting_fact: str = "") -> bool:
+def is_relevant_to_topic(
+    question: str,
+    topic: str,
+    answer: str = "",
+    supporting_fact: str = ""
+) -> bool:
     """
-    Check if content is relevant to the topic using concept hierarchy.
-    Does NOT depend on FactExtractor private methods.
+    Determine whether a generated question is relevant to its topic.
+
+    Priority:
+    1. Supporting fact overlap
+    2. Answer overlap
+    3. Concept hierarchy
+    4. Topic name
     """
-    topic_lower = topic.lower()
-    
-    # Combine all text to check
-    combined_text = question.lower()
-    if answer:
-        combined_text += " " + answer.lower()
+
+    combined = " ".join([
+        question or "",
+        answer or "",
+        supporting_fact or ""
+    ]).lower()
+
+    # ----------------------------------------------------
+    # 1. Supporting fact overlap (highest priority)
+    # ----------------------------------------------------
+
     if supporting_fact:
-        combined_text += " " + supporting_fact.lower()
-    
-    # Build topic keywords from the topic name
-    topic_keywords = [topic_lower]
-    topic_words = topic_lower.split()
-    for word in topic_words:
-        if len(word) > 3:
-            topic_keywords.append(word)
-    
-    # Add child concepts from hierarchy
-    for key, children in CONCEPT_HIERARCHY.items():
-        if key in topic_lower:
-            topic_keywords.extend(children)
-    
-    # Remove duplicates
-    topic_keywords = list(set(topic_keywords))
-    
-    # Check if any keyword appears in combined text
-    for keyword in topic_keywords:
-        if keyword in combined_text:
+
+        important_words = [
+            w.lower()
+            for w in re.findall(r"[A-Za-z][A-Za-z0-9\-]{3,}", supporting_fact)
+            if len(w) > 3
+        ]
+
+        overlap = sum(
+            1
+            for word in set(important_words)
+            if word in combined
+        )
+
+        if overlap >= 2:
             return True
-    
-    # If answer is a valid concept, check if it's related
+
+    # ----------------------------------------------------
+    # 2. Answer overlap
+    # ----------------------------------------------------
+
     if answer:
-        answer_lower = answer.lower()
-        for keyword in topic_keywords:
-            if len(keyword) > 3 and keyword in answer_lower:
-                return True
-        
-        # Check if answer is a child concept
-        for key, children in CONCEPT_HIERARCHY.items():
-            if key in topic_lower:
-                for child in children:
-                    if child in answer_lower:
-                        return True
-    
-    # Check supporting fact
-    if supporting_fact:
-        for keyword in topic_keywords:
-            if keyword in supporting_fact.lower():
-                return True
-    
+
+        answer_words = [
+            w.lower()
+            for w in re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,}", answer)
+            if len(w) > 2
+        ]
+
+        overlap = sum(
+            1
+            for word in set(answer_words)
+            if word in combined
+        )
+
+        if overlap >= 1:
+            return True
+
+    # ----------------------------------------------------
+    # 3. Concept hierarchy
+    # ----------------------------------------------------
+
+    topic_lower = topic.lower()
+
+    for parent, children in CONCEPT_HIERARCHY.items():
+
+        if parent.lower() in topic_lower:
+
+            for child in children:
+
+                if child.lower() in combined:
+                    return True
+
+    # ----------------------------------------------------
+    # 4. Topic name fallback
+    # ----------------------------------------------------
+
+    if topic_lower in combined:
+        return True
+
+    for word in topic_lower.split():
+
+        if len(word) > 3 and word in combined:
+            return True
+
     log_validation_failure(
         None,
         "topic_relevance",
-        "No topic keywords found in combined text",
+        "Question not sufficiently related to topic",
         {
             "topic": topic,
-            "question_preview": question[:60] + "...",
-            "answer_preview": answer[:60] + "..." if answer else "None",
-            "topic_keywords": topic_keywords[:10]
+            "question_preview": question[:60],
+            "answer_preview": answer[:60],
         }
     )
+
     return False
 
 
@@ -327,173 +307,6 @@ def validate_structure(question: dict) -> bool:
     
     return True
 
-
-def validate_grounding(question: dict, context: str, supporting_fact: str = "") -> bool:
-    """
-    Check if the correct answer is grounded in the note-backed context.
-    Uses flexible matching: exact, keyword, and phrase-level.
-    """
-    if 'correct' not in question or 'options' not in question:
-        return False
-    
-    correct_letter = question['correct']
-    options = question['options']
-    correct_text = get_correct_text_from_options(options, correct_letter)
-    
-    if not correct_text:
-        log_validation_failure(question, "grounding", "Could not extract correct text from options", {"correct_letter": correct_letter})
-        return False
-    
-    # Prefer supporting_fact, fallback to context
-    grounding_context = supporting_fact or context or ""
-    if not grounding_context:
-        log_validation_failure(question, "grounding", "No context provided for grounding check")
-        return False
-
-    context_lower = grounding_context.lower()
-    correct_lower = correct_text.lower()
-    correct_words = correct_lower.split()
-    
-    # Level 1: Exact match
-    if correct_lower in context_lower:
-        print(f"✅ Grounding: exact match for '{correct_text}'")
-        return True
-    
-    # Level 2: Any significant word appears in context
-    for word in correct_words:
-        if len(word) > 3 and word not in STOP_WORDS:
-            if word in context_lower:
-                print(f"✅ Grounding: found keyword '{word}' from '{correct_text}'")
-                return True
-    
-    # Level 3: Multi-word phrase matching (at least 60% of words appear together)
-    if len(correct_words) >= 2:
-        sentences = re.split(r'[.!?\n]', context_lower)
-        for sentence in sentences:
-            sentence_words = set(sentence.split())
-            matched_words = [w for w in correct_words if w in sentence_words]
-            if len(matched_words) >= len(correct_words) * 0.6:
-                print(f"✅ Grounding: phrase match for '{correct_text}' in sentence")
-                return True
-    
-    log_validation_failure(question, "grounding", "Correct answer not found in context", {
-        "correct_text": correct_text,
-        "context_preview": grounding_context[:100] + "...",
-        "correct_words": correct_words[:3]
-    })
-    return False
-
-
-def question_equals_answer(question_text: str, options: list) -> bool:
-    """Check if the question is just restating the correct answer."""
-    q_clean = question_text.strip().lower().rstrip('.?')
-    for opt in options:
-        opt_text = extract_option_text(opt).lower().rstrip('.')
-        if opt_text and (opt_text in q_clean or q_clean in opt_text) and len(opt_text) > 20:
-            print(f"⚠️ Option text duplicates question text: '{opt_text[:40]}...'")
-            return True
-    return False
-
-
-def has_redundant_options(options) -> bool:
-    """Check if one option contains another option."""
-    texts = [extract_option_text(opt).lower() for opt in options]
-    
-    for i, text in enumerate(texts):
-        for j, other in enumerate(texts):
-            if i != j and len(other) > 3 and other in text:
-                print(f"⚠️ Option overlap: '{other}' found inside '{text}'")
-                return True
-    
-    for i, text in enumerate(texts):
-        parts = [p.strip() for p in text.split(',')]
-        if len(parts) > 2:
-            for j, other in enumerate(texts):
-                if i != j and any(other in part for part in parts):
-                    print(f"⚠️ Option contains parts of another option: '{text}' contains '{other}'")
-                    return True
-    
-    return False
-
-
-def explanation_contradicts_answer(question: dict) -> bool:
-    """Check if the explanation text actually supports the marked-correct option."""
-    correct_letter = question.get('correct', '')
-    options = question.get('options', [])
-    explanation = question.get('explanation', '').strip().lower()
-
-    if not options or not correct_letter:
-        return True
-
-    correct_text = get_correct_text_from_options(options, correct_letter)
-    if not correct_text:
-        return True
-
-    if not explanation:
-        return False
-
-    correct_text_lower = correct_text.lower()
-    explanation_words = [w for w in re.split(r'[^a-z0-9]+', explanation) if len(w) > 2]
-    correct_words = [w for w in re.split(r'[^a-z0-9]+', correct_text_lower) if len(w) > 2]
-
-    if not correct_words:
-        return True
-
-    # Check if explanation supports another option more strongly
-    other_option_texts = []
-    for opt in options:
-        opt_letter = extract_option_letter(opt)
-        if opt_letter and opt_letter != correct_letter:
-            opt_text = extract_option_text(opt).lower()
-            if opt_text:
-                other_option_texts.append(opt_text)
-
-    for other_text in other_option_texts:
-        other_words = [w for w in re.split(r'[^a-z0-9]+', other_text) if len(w) > 2]
-        if not other_words:
-            continue
-        other_overlap = set(explanation_words) & set(other_words)
-        correct_overlap = set(explanation_words) & set(correct_words)
-        if len(other_overlap) > len(correct_overlap):
-            print(f"⚠️ Explanation appears to support another option: '{other_text}'")
-            return True
-
-    # Reject explanations that don't mention the correct answer
-    if len(correct_overlap := set(explanation_words) & set(correct_words)) < 1:
-        print(f"⚠️ Explanation doesn't mention the correct answer text: '{correct_text}'")
-        return True
-
-    # Reject generic explanations that don't provide grounding
-    if any(phrase in explanation for phrase in GENERIC_PHRASES):
-        if len(correct_overlap) < 2:
-            print(f"⚠️ Explanation is too generic to support '{correct_text}'")
-            return True
-
-    return False
-
-
-def validate_semantic(question: dict) -> bool:
-    """Check semantic quality of the question."""
-    if has_redundant_options(question.get('options', [])):
-        log_validation_failure(question, "semantic", "Redundant options detected")
-        return False
-    
-    if explanation_contradicts_answer(question):
-        log_validation_failure(question, "semantic", "Explanation contradicts answer")
-        return False
-    
-    if has_garbled_text(question.get('question', '')):
-        log_validation_failure(question, "semantic", "Garbled text in question")
-        return False
-    
-    for opt in question.get('options', []):
-        if has_garbled_text(str(opt)):
-            log_validation_failure(question, "semantic", "Garbled text in option")
-            return False
-    
-    return True
-
-
 def normalize_and_validate_correct_field(question: dict) -> bool:
     """Ensure 'correct' is exactly one of A/B/C/D."""
     correct = str(question.get('correct', '')).strip()
@@ -530,153 +343,6 @@ def normalize_and_validate_correct_field(question: dict) -> bool:
     
     log_validation_failure(question, "correct_field", "Could not resolve correct field", {"correct_value": correct})
     return False
-
-
-# ============ GROUNDING ATTACHMENT ============
-
-def build_consistent_explanation(question_text: str, options: list, correct_letter: str,
-                                  correct_text: str, context: str = "", facts: list = None) -> str:
-    """Build a short explanation from a single selected supporting fact."""
-    if not correct_text:
-        return ""
-
-    correct_text = correct_text.strip()
-    if not correct_text:
-        return ""
-
-    if facts:
-        for fact in facts:
-            supporting_fact = normalize_supporting_fact(
-                str(fact.get('supporting_fact') or fact.get('sentence') or fact.get('definition') or '').strip()
-            )
-            if not supporting_fact:
-                continue
-            supporting_lower = supporting_fact.lower()
-            correct_lower = correct_text.lower()
-            if correct_lower in supporting_lower or any(
-                word in supporting_lower for word in 
-                [w for w in re.split(r'[^a-z0-9]+', correct_lower) if len(w) > 2]
-            ):
-                explanation = f"{correct_text} is correct because {supporting_fact}"
-                if len(explanation.split()) <= MAX_EXPLANATION_WORDS:
-                    return explanation
-
-    if context:
-        cleaned_context = normalize_supporting_fact(context)
-        if cleaned_context:
-            explanation = f"{correct_text} is correct because {cleaned_context}"
-            if len(explanation.split()) <= MAX_EXPLANATION_WORDS:
-                return explanation
-
-    return ""
-
-
-def _attach_grounding_fields(question: dict, correct_text: str, supporting_fact: str, context: str = "") -> bool:
-    """Attach correct_text/supporting_fact/explanation to a question."""
-    if not question or not isinstance(question, dict):
-        return False
-
-    question['correct_text'] = correct_text or ""
-    question['supporting_fact'] = normalize_supporting_fact(supporting_fact or "")
-
-    if not question['supporting_fact']:
-        question['supporting_fact'] = normalize_supporting_fact(context or "")
-
-    # Try to build a proper explanation
-    if correct_text and question['supporting_fact']:
-        explanation = build_consistent_explanation(
-            question_text=question.get('question', ''),
-            options=question.get('options', []),
-            correct_letter=question.get('correct', ''),
-            correct_text=correct_text,
-            context=question['supporting_fact'],
-            facts=[{'supporting_fact': question['supporting_fact']}]
-        )
-        if explanation and not question.get('explanation'):
-            question['explanation'] = explanation
-        return True
-    
-    # Fallback: create a simple grounded explanation
-    if correct_text and question['supporting_fact']:
-        question['explanation'] = f"{correct_text} is correct because {question['supporting_fact']}"
-        return True
-    elif correct_text:
-        question['explanation'] = f"{correct_text} is the correct answer."
-        return True
-    
-    question['explanation'] = ""
-    return True
-
-
-def _select_supporting_fact(correct_text: str, supporting_facts: list = None,
-                            fallback_context: str = "") -> str:
-    """Pick the strongest note-backed supporting sentence for a question."""
-
-    candidates = []
-
-    if supporting_facts:
-        for fact in supporting_facts:
-            if isinstance(fact, dict):
-                candidate = (
-                    fact.get('supporting_fact')
-                    or fact.get('sentence')
-                    or fact.get('definition')
-                    or ""
-                )
-            else:
-                candidate = str(fact)
-
-            cleaned = normalize_supporting_fact(candidate)
-
-            if cleaned:
-                candidates.append(cleaned)
-
-    if fallback_context:
-        sentences = re.split(r'[.!?\n]+', fallback_context)
-
-        for sentence in sentences:
-            cleaned = normalize_supporting_fact(sentence)
-
-            if cleaned:
-                candidates.append(cleaned)
-
-
-    if not candidates:
-        return ""
-
-
-    correct_words = [
-        w.lower()
-        for w in re.findall(r'\w+', correct_text)
-        if len(w) > 2
-    ]
-
-
-    best_candidate = ""
-    best_score = 0
-
-
-    for candidate in candidates:
-
-        candidate_lower = candidate.lower()
-
-        score = 0
-
-        for word in correct_words:
-            if word in candidate_lower:
-                score += 1
-
-
-        if correct_text.lower() in candidate_lower:
-            score += 5
-
-
-        if score > best_score:
-            best_score = score
-            best_candidate = candidate
-
-
-    return best_candidate or candidates[0]
 
 
 # ============ QUIZ GENERATOR CLASS ============
@@ -911,7 +577,7 @@ Generate 5 different questions now:"""
             try:
                 repaired = repair_json(content)
                 result = json.loads(repaired)
-                print(f"✅ JSON repaired successfully")
+                print("✅ JSON repaired successfully")
             except Exception as e:
                 print(f"⚠️ JSON repair failed: {e}")
                 content = content.replace("'", '"')
@@ -981,8 +647,8 @@ Generate 5 different questions now:"""
                 question['fact_id'] = fact_data.get('fact_id') or f"fact_{abs(hash(fact))}"
                 question['source_note'] = fact_data.get('source_note') or 'inline'
                 
-                if not _attach_grounding_fields(question, correct_text, sanitized_supporting_fact, context=fact):
-                    print(f"⚠️ Could not attach grounded explanation for fact-based question")
+                if not attach_grounding_fields(question, correct_text, sanitized_supporting_fact, context=fact):
+                    print("⚠️ Could not attach grounded explanation for fact-based question")
                     # Continue - we already have a fallback in _attach_grounding_fields
                 
                 # Quality scoring
@@ -1074,12 +740,12 @@ Generate 1 question now:"""
             
             try:
                 result = json.loads(content)
-                print(f"✅ JSON parsed successfully")
+                print("✅ JSON parsed successfully")
             except json.JSONDecodeError:
                 try:
                     repaired = repair_json(content)
                     result = json.loads(repaired)
-                    print(f"✅ JSON repaired successfully")
+                    print("✅ JSON repaired successfully")
                 except Exception as e:
                     print(f"⚠️ JSON repair failed: {e}")
                     return {"questions": []}
@@ -1141,18 +807,22 @@ Generate 1 question now:"""
                             print("🔧 Repaired question format")
 
                         if not validate_structure(q):
-                            print(f"⚠️ Skipping malformed question")
+                            print("⚠️ Skipping malformed question")
                             continue
                     
                     # Stage 2: Content - Grounding
                     if not validate_grounding(q, context):
-                        print(f"⚠️ Skipping ungrounded question")
+                        print("⚠️ Skipping ungrounded question")
                         continue
                     
                     # Stage 2: Content - Topic relevance
                     correct_letter = q.get('correct', '')
                     correct_text = get_correct_text_from_options(q.get('options', []), correct_letter)
-                    supporting_fact = _select_supporting_fact(correct_text, supporting_facts, fallback_context=context)
+                    supporting_fact = select_supporting_fact(
+                        correct_text,
+                        supporting_facts,
+                        fallback_context=context
+                    )
                     
                     if not is_relevant_to_topic(
                         q.get('question', ''),
@@ -1160,28 +830,37 @@ Generate 1 question now:"""
                         correct_text,
                         supporting_fact
                     ):
-                        print(f"⚠️ Skipping irrelevant question")
+                        print("⚠️ Skipping irrelevant question")
                         continue
                     
                     if question_equals_answer(q.get('question', ''), q.get('options', [])):
-                        print(f"⚠️ Skipping question that restates answer")
+                        print("⚠️ Skipping question that restates answer")
                         continue
                     
                     # Stage 3: Semantic
                     if not validate_semantic(q):
-                        print(f"⚠️ Skipping question due to semantic issues")
+                        print("⚠️ Skipping question due to semantic issues")
                         continue
                     
                     # Normalize correct field
                     if not normalize_and_validate_correct_field(q):
-                        print(f"⚠️ Skipping question with unresolvable correct field")
+                        print("⚠️ Skipping question with unresolvable correct field")
                         continue
 
                     # Attach grounding fields
-                    if not _attach_grounding_fields(q, correct_text, supporting_fact, context=context):
-                        print(f"⚠️ Could not attach grounded supporting fact, using fallback")
+                    if not attach_grounding_fields(
+                        q,
+                        correct_text,
+                        supporting_fact,
+                        context=context
+                    ):
+                        print("⚠️ Could not attach grounded supporting fact, using fallback")
                         q['supporting_fact'] = normalize_supporting_fact(context[:200] + "...")
                         q['explanation'] = f"{correct_text} is correct based on the content."
+
+                    # Required for cache validation
+                    q['fact_id'] = f"generated_{abs(hash(q.get('question', '')))}"
+                    q['source_note'] = "llm_generated"
                     
                     # Quality scoring
                     facts = self.cache.get_facts(topic) if hasattr(self.cache, 'get_facts') else []
@@ -1241,7 +920,7 @@ Generate 1 question now:"""
             
             return {"questions": valid_questions}
             
-        except Exception as e:
+        except Exception:
             import traceback
             traceback.print_exc()
             return {"questions": []}
@@ -1298,7 +977,7 @@ Generate 1 fill-in-the-blank question now:"""
             try:
                 repaired = repair_json(content)
                 result = json.loads(repaired)
-                print(f"✅ Fill-blank JSON repaired successfully")
+                print("✅ Fill-blank JSON repaired successfully")
             except Exception as e:
                 print(f"⚠️ Fill-blank JSON repair failed: {e}")
                 content = content.replace("'", '"')
@@ -1328,13 +1007,13 @@ Generate 1 fill-in-the-blank question now:"""
             for q in result['questions']:
                 if 'question' in q and 'correct' in q and '_______' in q['question']:
                     if has_garbled_text(q['question']) or has_garbled_text(q['correct']):
-                        print(f"⚠️ Skipping fill-blank with garbled text")
+                        print("⚠️ Skipping fill-blank with garbled text")
                         continue
                     
                     # Stronger grounding: correct answer must appear in context
                     if q['correct'].lower() in context.lower():
                         valid.append(q)
-                        print(f"✅ Fill-blank question generated and grounded")
+                        print("✅ Fill-blank question generated and grounded")
                     else:
                         print(f"⚠️ Fill-blank grounding failed: '{q['correct']}' not in context")
             

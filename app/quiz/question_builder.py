@@ -17,14 +17,12 @@ All facts passed to this module are assumed to be already normalized and validat
 """
 
 import random
-from typing import List, Dict, Any, Optional, Tuple
-from collections import defaultdict
 import logging
 
+from typing import List, Dict, Any, Optional, Tuple
+
 from .question_templates import QuestionTemplates
-from .scenario_builder import ScenarioBuilder
 from .distractor_selector import DistractorSelector
-from .question_scorer import QuestionScorer
 from ..models.fact_schema import get_question_types_for_type, get_question_difficulty
 
 logger = logging.getLogger(__name__)
@@ -51,9 +49,8 @@ class QuestionBuilder:
     def __init__(self):
         """Initialize the question builder with required dependencies."""
         self.templates = QuestionTemplates()
-        self.scenario_builder = ScenarioBuilder()
         self.distractor_selector = DistractorSelector()
-        self.scorer = QuestionScorer()
+        
 
         # Question type weights by concept type
         self.type_weights = {

@@ -15,7 +15,7 @@ This is a lightweight text-generation utility used by the quiz pipeline.
 """
 
 import random
-from typing import Dict, Any, Optional, List
+from typing import Optional, List
 
 
 # ============================================================================
@@ -360,6 +360,5 @@ if __name__ == "__main__":
     print(f"Scenario for 'OOP': {builder.generate_scenario('OOP')}")
 
     # Test convenience function
-    from prompt_builder import build_question
     q = build_question("Cloud Storage", "Stores data on remote servers")
     print(f"\nConvenience function: {q}")

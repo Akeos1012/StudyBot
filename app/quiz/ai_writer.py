@@ -12,9 +12,7 @@ Responsibilities:
 5. Return parsed questions to the caller
 """
 
-from typing import List, Dict, Any, Optional, Tuple
-import logging
-
+from typing import List, Dict, Any, Optional
 from .prompt_builder import PromptBuilder
 from .llm_client import LLMClient
 from .llm_parser import LLMParser

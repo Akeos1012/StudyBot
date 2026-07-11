@@ -18,7 +18,7 @@ This module is reusable by any future AI feature including:
 """
 
 import ollama
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 import logging
 
 # Configure module logger

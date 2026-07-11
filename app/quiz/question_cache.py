@@ -19,7 +19,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from .options_parser import get_correct_text_from_options
 from .question_validator import is_valid_question
 from .question_similarity import is_similar_to_pool
 

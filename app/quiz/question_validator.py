@@ -6,8 +6,7 @@ This module provides validation functions for questions.
 It does NOT generate or modify questions.
 """
 
-from typing import Dict, Any, List, Optional
-import re
+from typing import Dict, Any
 
 from .options_parser import (
     get_correct_text_from_options,

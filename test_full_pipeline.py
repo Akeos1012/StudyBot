@@ -54,7 +54,18 @@ def test_full_pipeline():
     facts = cache.get_facts(topic)
 
     if facts:
-        questions = generator.build_quiz(facts, count=3)
+        questions = []
+
+        for fact in facts[:3]:
+            question = generator.generate_with_retry(
+                fact=fact.get("supporting_fact") or fact.get("definition"),
+                answer=fact.get("concept"),
+                topic="Cloud",
+                fact_data=fact
+            )
+
+    if question:
+        questions.append(question)
         print(f"  ✅ Generated {len(questions)} questions")
 
         # Show sample

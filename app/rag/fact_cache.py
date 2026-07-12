@@ -8,6 +8,7 @@ except ImportError:
     from app.rag.fact_extractor import FactExtractor
 
 from ..models.fact_schema import validate_fact, normalize_fact
+from .fact_cleaner import clean_facts
 
 class FactCache:
     def __init__(self, notes_path="sample_notes", cache_path="facts_cache.json"):
@@ -61,16 +62,21 @@ class FactCache:
         return removed_count
     
     def build(self):
-        """Build cache from all notes"""
         print("📂 Building fact cache...")
-        self.cache = self.extractor.extract_all()
-        
-        # Validate and normalize after building
+
+        raw_facts = self.extractor.extract_all()
+
+        cleaned_facts = {
+            topic: clean_facts(facts)
+            for topic, facts in raw_facts.items()
+        }
+
+        self.cache = cleaned_facts
+
         self.validate_cache()
-        
-        # Save to disk
+
         self.save_cache()
-        
+
         return self.cache
     
     def save_cache(self):
@@ -89,7 +95,14 @@ class FactCache:
             try:
                 with open(self.cache_path, 'r', encoding='utf-8') as f:
                     self.cache = json.load(f)
-                
+
+                raw_facts = self.extractor.extract_all()
+
+                self.cache = {
+                    topic: clean_facts(facts)
+                    for topic, facts in raw_facts.items()
+                }
+
                 total_facts = sum(len(v) for v in self.cache.values())
                 print(f"✅ Loaded {total_facts} facts from cache")
                 

@@ -48,7 +48,7 @@ def setup_routes(metadata_loader, metadata):
             raise HTTPException(404, f"No notes found for topic: {topic}")
         return filtered
 
-    @router.post("/generate-quiz")
+    @router.post("/quiz/generate")
     async def generate_quiz(request: dict):
         topic = request.get("topic", "Database")
         subtopic = request.get("subtopic", "")
@@ -64,6 +64,11 @@ def setup_routes(metadata_loader, metadata):
             fresh=fresh,
             question_type="multiple"
         )
+        
+        if questions:
+            print(repr(questions[0].get("supporting_fact")))
+        else:
+            print("⚠️ No questions generated")
 
         return {
             "topic": topic,
@@ -112,6 +117,13 @@ def setup_routes(metadata_loader, metadata):
             "message": "Notes refreshed successfully!",
             "total_notes": len(new_metadata),
             "topics": topics
+        }
+    
+    @router.get("/cache/status")
+    async def cache_status():
+        return {
+            "message": "Cache status endpoint ready",
+            "status": "ok"
         }
 
     return router

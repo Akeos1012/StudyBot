@@ -1,13 +1,20 @@
-import ollama
 import json
 import re
 
+from difflib import SequenceMatcher
 from json_repair import repair_json
 from typing import List, Dict, Any, Optional, Tuple
 
 from .question_cache import QuestionCache
 from .question_scorer import QuestionScorer
 from .question_similarity import is_similar_to_pool
+from .question_prompt import build_fact_question_prompt
+from .explanation_validator import validate_explanation
+from .question_validator import is_duplicate_question
+from ..rag.fact_cache import FactCache
+from .llm_parser import LLMParser
+from .llm_client import LLMClient
+
 
 from .question_semantic import (
     validate_semantic,
@@ -15,11 +22,6 @@ from .question_semantic import (
 )
 
 from .validation_logger import log_validation_failure
-
-from .question_constants import (
-    MAX_QUESTION_LENGTH,
-    MIN_SUPPORTING_WORDS,
-)
 
 from .options_parser import (
     normalize_options,
@@ -36,30 +38,24 @@ from .question_grounding import (
     question_equals_answer,
 )
 
+from .question_fallback import (
+    generate_fallback_question,
+    generate_generic_fallback,
+    is_valid_concept,
+)
+
+from .question_validator import (
+    validate_structure,
+    normalize_and_validate_correct_field,
+    validate_question_focus,
+    is_relevant_to_topic,
+)
+
+from .domain_validator import validate_domain_correctness
+from ..rag.fact_cleaner import clean_text
+from ..rag.retriever import Retriever
+
 # ============ CONSTANTS ============
-
-# Concept hierarchy for topic relevance
-CONCEPT_HIERARCHY = {
-    'cloud': [
-        'cloud storage', 'cloud database', 'cloud computing',
-        'cloud infrastructure', 'virtual machine', 'data center',
-        'edge computing', 'serverless', 'containerization',
-        'block storage', 'object storage', 'file storage'
-    ],
-    'database': [
-        'sql', 'nosql', 'relational', 'mongodb', 'postgresql',
-        'mysql', 'query', 'indexing', 'normalization'
-    ],
-    'algorithm': [
-        'sorting', 'searching', 'recursion', 'dynamic programming',
-        'greedy', 'backtracking', 'divide and conquer', 'complexity'
-    ],
-    'programming': [
-        'function', 'variable', 'class', 'object', 'inheritance',
-        'polymorphism', 'encapsulation', 'oop', 'functional'
-    ]
-}
-
 # Banned layer phrases
 BANNED_LAYER_PATTERNS = [
     r'foundational layer',
@@ -93,29 +89,56 @@ INVALID_CONCEPT_WORDS = {
 
 
 
-def filter_similar_questions(questions: List[Dict[str, Any]], threshold: float = 0.6) -> List[Dict[str, Any]]:
-    """Remove similar questions using question_similarity module."""
+def filter_similar_questions(
+    questions: List[Dict[str, Any]],
+    threshold: float = 0.6
+) -> List[Dict[str, Any]]:
+    """Remove duplicate questions and similar answers."""
+
     if not questions:
         return []
-    
+
     unique = []
-    seen_answers = set()
-    
+    seen_answers = []
+
     for q in questions:
         correct_letter = q.get('correct', '')
         options = q.get('options', [])
-        correct_text = get_correct_text_from_options(options, correct_letter).lower()
-        
-        if correct_text and correct_text in seen_answers:
-            continue
-        
-        if is_similar_to_pool(q, unique, threshold):
-            continue
-        
-        unique.append(q)
+
+        correct_text = get_correct_text_from_options(
+            options,
+            correct_letter
+        ).lower()
+
+        # Check answer similarity
+        duplicate_answer = False
+
         if correct_text:
-            seen_answers.add(correct_text)
-    
+            for seen in seen_answers:
+                similarity = SequenceMatcher(
+                    None,
+                    correct_text,
+                    seen
+                ).ratio()
+
+                if similarity > 0.90 and is_similar_to_pool(q, unique, 0.85):
+                    duplicate_answer = True
+                    break
+
+        if duplicate_answer:
+            print(f"❌ Removed duplicate answer: {q['question']}")
+            continue
+
+        # Check question similarity
+        if is_similar_to_pool(q, unique, threshold):
+            print(f"❌ Removed similar question: {q['question']}")
+            continue
+
+        unique.append(q)
+
+        if correct_text:
+            seen_answers.append(correct_text)
+
     return unique
 
 
@@ -144,217 +167,36 @@ def sanitize_supporting_fact(supporting_fact: str, concept: str) -> Optional[str
     
     return supporting_fact
 
-
-# ============ TOPIC RELEVANCE ============
-
-def is_relevant_to_topic(
-    question: str,
-    topic: str,
-    answer: str = "",
-    supporting_fact: str = ""
-) -> bool:
-    """
-    Determine whether a generated question is relevant to its topic.
-
-    Priority:
-    1. Supporting fact overlap
-    2. Answer overlap
-    3. Concept hierarchy
-    4. Topic name
-    """
-
-    combined = " ".join([
-        question or "",
-        answer or "",
-        supporting_fact or ""
-    ]).lower()
-
-    # ----------------------------------------------------
-    # 1. Supporting fact overlap (highest priority)
-    # ----------------------------------------------------
-
-    if supporting_fact:
-
-        important_words = [
-            w.lower()
-            for w in re.findall(r"[A-Za-z][A-Za-z0-9\-]{3,}", supporting_fact)
-            if len(w) > 3
-        ]
-
-        overlap = sum(
-            1
-            for word in set(important_words)
-            if word in combined
-        )
-
-        if overlap >= 2:
-            return True
-
-    # ----------------------------------------------------
-    # 2. Answer overlap
-    # ----------------------------------------------------
-
-    if answer:
-
-        answer_words = [
-            w.lower()
-            for w in re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,}", answer)
-            if len(w) > 2
-        ]
-
-        overlap = sum(
-            1
-            for word in set(answer_words)
-            if word in combined
-        )
-
-        if overlap >= 1:
-            return True
-
-    # ----------------------------------------------------
-    # 3. Concept hierarchy
-    # ----------------------------------------------------
-
-    topic_lower = topic.lower()
-
-    for parent, children in CONCEPT_HIERARCHY.items():
-
-        if parent.lower() in topic_lower:
-
-            for child in children:
-
-                if child.lower() in combined:
-                    return True
-
-    # ----------------------------------------------------
-    # 4. Topic name fallback
-    # ----------------------------------------------------
-
-    if topic_lower in combined:
-        return True
-
-    for word in topic_lower.split():
-
-        if len(word) > 3 and word in combined:
-            return True
-
-    log_validation_failure(
-        None,
-        "topic_relevance",
-        "Question not sufficiently related to topic",
-        {
-            "topic": topic,
-            "question_preview": question[:60],
-            "answer_preview": answer[:60],
-        }
-    )
-
-    return False
-
-
-# ============ QUESTION FOCUS VALIDATION ============
-
-def validate_question_focus(question: dict, concept: str) -> bool:
-    """Validate that the generated question focuses on the correct concept."""
-    q_text = question.get('question', '').lower()
-    concept_lower = concept.lower()
-    
-    if 'layer' in q_text and 'layer' not in concept_lower:
-        print(f"⚠️ Question uses 'layer' but concept is '{concept}'")
-        return False
-    
-    if concept_lower in q_text:
-        return True
-    
-    concept_words = concept_lower.split()
-    significant_words = [w for w in concept_words if len(w) > 3 and w not in ['the', 'this', 'that']]
-    if significant_words:
-        matched = sum(1 for w in significant_words if w in q_text)
-        if matched / len(significant_words) < 0.5:
-            print(f"⚠️ Question doesn't reference concept '{concept}': {q_text[:60]}...")
-            return False
-    
-    return True
-
-
-# ============ VALIDATION STAGES ============
-
-def validate_structure(question: dict) -> bool:
-    """Check that the question has all required fields with correct types."""
-    required = ['question', 'options', 'correct', 'explanation']
-    missing = [f for f in required if f not in question]
-    
-    if missing:
-        log_validation_failure(question, "structure", f"Missing required fields: {missing}", {"missing_fields": missing})
-        return False
-    
-    if not isinstance(question['options'], list) or len(question['options']) != 4:
-        log_validation_failure(question, "structure", "Options must be a list of 4 items", {"options_count": len(question.get('options', []))})
-        return False
-    
-    q_text = question['question'].strip()
-    if not q_text.endswith('?'):
-        log_validation_failure(question, "structure", "Question doesn't end with '?'", {"question": q_text[:80] + "..."})
-        return False
-    
-    if len(q_text) > MAX_QUESTION_LENGTH:
-        log_validation_failure(question, "structure", f"Question too long ({len(q_text)} chars)", {"length": len(q_text)})
-        return False
-    
-    if re.search(r'\b[A-D]\)', q_text):
-        log_validation_failure(question, "structure", "Question contains leaked option markers", {"question": q_text[:80] + "..."})
-        return False
-    
-    return True
-
-def normalize_and_validate_correct_field(question: dict) -> bool:
-    """Ensure 'correct' is exactly one of A/B/C/D."""
-    correct = str(question.get('correct', '')).strip()
-    options = question.get('options', [])
-    
-    if not options or len(options) != 4:
-        log_validation_failure(question, "correct_field", "Invalid options count", {"options_count": len(options)})
-        return False
-    
-    if correct in ['A', 'B', 'C', 'D']:
-        question['correct'] = correct
-        return True
-    
-    letter_match = re.match(r'^([A-D])\s*[\)\.\-\s]', correct)
-    if letter_match:
-        question['correct'] = letter_match.group(1)
-        return True
-    
-    for opt in options:
-        opt_letter = extract_option_letter(opt)
-        opt_text = extract_option_text(opt).lower()
-        if opt_text == correct.lower():
-            question['correct'] = opt_letter
-            return True
-    
-    for opt in options:
-        opt_text = extract_option_text(opt).lower()
-        if correct.lower() in opt_text or opt_text in correct.lower():
-            opt_letter = extract_option_letter(opt)
-            if opt_letter:
-                question['correct'] = opt_letter
-                print(f"✅ Fuzzy matched '{correct}' to '{opt_text}' -> {opt_letter}")
-                return True
-    
-    log_validation_failure(question, "correct_field", "Could not resolve correct field", {"correct_value": correct})
-    return False
-
-
 # ============ QUIZ GENERATOR CLASS ============
 
 class QuizGenerator:
-    def __init__(self, model: str = "qwen2.5:3b", min_quality_score: float = 0.6):
+    def __init__(
+        self,
+        model: str = "qwen2.5:3b",
+        min_quality_score: float = 0.6
+    ):
         self.model = model
+        self.llm = LLMClient(model=model)
+     
+        # Cache of previously generated questions
         self.cache = QuestionCache()
+
+        # Knowledge base
+        self.fact_cache = FactCache()
+        self.fact_cache.load()
+        print("FACT CACHE TYPE:", type(self.fact_cache))
+        print("HAS get_facts:", hasattr(self.fact_cache, "get_facts"))
+        print("HAS get_topics:", hasattr(self.fact_cache, "get_topics"))
+
+        # Fact retriever
+        self.retriever = Retriever(self.fact_cache)
+
+        self.parser = LLMParser()
         self.scorer = QuestionScorer()
         self.min_quality_score = min_quality_score
         self._supporting_facts = []
-
+        
+        
     def _check_quality(self, question: dict, facts: list = None) -> Tuple[bool, float, Dict[str, float]]:
         """Check question quality using QuestionScorer."""
         if facts is None:
@@ -370,137 +212,6 @@ class QuizGenerator:
             print(f"✅ Quality check passed: score={score:.2f}")
         
         return is_acceptable, score, scores
-
-    def _is_valid_concept(self, concept: str) -> bool:
-        """Check if a concept is valid (not a verb, adjective, or generic word)."""
-        if not concept or len(concept) < 2:
-            return False
-        
-        concept_lower = concept.lower()
-        
-        if concept_lower in INVALID_CONCEPT_WORDS:
-            return False
-        
-        if len(concept_lower) == 1:
-            return False
-        
-        if len(concept.split()) >= 2:
-            return True
-
-        if concept.lower() in ["database", "cloud", "algorithm", "programming"]:
-            return False
-        
-        if concept[0].isupper() and len(concept) > 2:
-            return True
-        
-        return False
-
-    def _find_supporting_fact_for_concept(self, concept: str, context: str) -> str:
-        """Find a supporting fact for a concept from the context."""
-        if not context or not concept:
-            return ""
-        
-        sentences = re.split(r'[.!?\n]+', context)
-        for sentence in sentences:
-            if concept.lower() in sentence.lower():
-                cleaned = normalize_supporting_fact(sentence)
-                if cleaned and len(cleaned.split()) >= MIN_SUPPORTING_WORDS:
-                    return cleaned
-        
-        for sentence in sentences:
-            cleaned = normalize_supporting_fact(sentence)
-            if cleaned and len(cleaned.split()) >= MIN_SUPPORTING_WORDS:
-                return cleaned
-        
-        return context[:200] + "..."
-
-    def _create_fact_based_question(self, concept: str, supporting_fact: str, topic: str) -> dict:
-        """Create a question directly from an extracted fact."""
-        supporting_fact = normalize_supporting_fact(supporting_fact)
-        if not supporting_fact:
-            supporting_fact = f"Provides information about {concept}."
-        
-        fact_clean = supporting_fact
-        if concept.lower() in fact_clean.lower():
-            fact_clean = re.sub(re.escape(concept), '_______', fact_clean, flags=re.IGNORECASE)
-            question_text = f"Complete the statement: {fact_clean}"
-        else:
-            question_text = f"What is the correct term for: {supporting_fact}?"
-        
-        options = [
-            f"A) {concept}",
-            "B) Related Technology",
-            "C) Alternative Approach",
-            "D) Different Concept"
-        ]
-        
-        return {
-            "question": question_text,
-            "options": options,
-            "correct": "A",
-            "correct_text": concept,
-            "supporting_fact": supporting_fact,
-            "explanation": f"{concept} is correct because {supporting_fact}",
-            "source_note": "fact_based_fallback",
-            "fact_id": f"fact_fallback_{concept.lower().replace(' ', '_')}",
-            "_is_fallback": True,
-            "_quality_score": 0.7,
-            "_quality_scores": {
-                "semantic_coherence": 1.0,
-                "distractor_plausibility": 0.5,
-                "type_consistency": 1.0
-            }
-        }
-
-    def _generate_fallback_question(self, context: str, topic: str,
-                                    extracted_concepts: list = None) -> Optional[dict]:
-        """Generate a fallback question using extracted concepts."""
-        if extracted_concepts:
-            for concept in extracted_concepts:
-                if concept and self._is_valid_concept(concept):
-                    supporting_fact = self._find_supporting_fact_for_concept(concept, context)
-                    if supporting_fact:
-                        return self._create_fact_based_question(concept, supporting_fact, topic)
-        
-        if self._supporting_facts:
-            for sf in self._supporting_facts:
-                if isinstance(sf, dict):
-                    concept = sf.get('concept') or sf.get('correct_text') or sf.get('answer')
-                    supporting_fact = sf.get('supporting_fact') or sf.get('statement') or sf.get('definition')
-                    if concept and self._is_valid_concept(concept) and supporting_fact:
-                        return self._create_fact_based_question(concept, supporting_fact, topic)
-        
-        context_concepts = re.findall(r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})\b', context)
-        for concept in context_concepts:
-            if self._is_valid_concept(concept):
-                supporting_fact = self._find_supporting_fact_for_concept(concept, context)
-                if supporting_fact:
-                    return self._create_fact_based_question(concept, supporting_fact, topic)
-        
-        if topic and self._is_valid_concept(topic):
-            return self._create_fact_based_question(topic, context[:200] + "...", topic)
-        
-        return None
-
-    def _generate_generic_fallback(self, context: str, topic: str) -> dict:
-        """Last resort generic fallback when no concepts are available."""
-        return {
-            "question": f"What is the main concept discussed in {topic}?",
-            "options": ["A) The Main Concept", "B) Related Technology", "C) Alternative Approach", "D) Different Concept"],
-            "correct": "A",
-            "correct_text": "The Main Concept",
-            "supporting_fact": context[:200] + "...",
-            "explanation": "The main concept is the correct answer based on the content.",
-            "source_note": "generic_fallback",
-            "fact_id": f"generic_fallback_{topic.lower().replace(' ', '_')}",
-            "_is_fallback": True,
-            "_quality_score": 0.5,
-            "_quality_scores": {
-                "semantic_coherence": 0.5,
-                "distractor_plausibility": 0.3,
-                "type_consistency": 0.7
-            }
-        }
 
     def generate_with_retry(self, fact: str, answer: str, topic: str,
                            max_attempts: int = 3, fact_data: dict = None) -> Optional[dict]:
@@ -527,80 +238,46 @@ class QuizGenerator:
         
         fact_for_prompt = sanitized_supporting_fact
         
-        # Improved prompt: clearer, more specific, with stronger grounding requirement
-        prompt = f"""You are a computer science tutor creating a multiple-choice question.
-
-FACT: {fact_for_prompt}
-CORRECT ANSWER: {answer}
-TOPIC: {topic}
-
-Requirements:
-1. Question must end with "?"
-2. Option A MUST be "{answer}" exactly
-3. Correct field must be "A", "B", "C", or "D"
-4. Explanation must reference the fact
-5. All distractors must be plausible but incorrect
-6. Return ONLY valid JSON
-
-Example output:
-{{
-  "question": "What provides database services over the Internet instead of local storage systems?",
-  "options": ["A) Cloud Database", "B) Local Storage", "C) Network Database", "D) Distributed Storage"],
-  "correct": "A",
-  "explanation": "Cloud Database is correct because it provides database services over the Internet."
-}}
-
-Generate 5 different questions now:"""
+        prompt = build_fact_question_prompt(
+            fact_for_prompt,
+            answer,
+            topic
+        )
 
         try:
-            response = ollama.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                options={
-                    "temperature": 0.3,
-                    "top_p": 0.8,
-                    "num_predict": 800
-                }
-            )
-            
-            content = response['message']['content']
+            content = self.llm.generate(prompt)
+
             print(f"Fact-based response received: {len(content)} characters")
-            
-            json_match = re.search(r'\{[\s\S]*\}', content)
-            if not json_match:
-                log_validation_failure(None, "json_parse", "No JSON found in response")
+            result = self.parser.parse(content)
+
+            if result is None:
+                log_validation_failure(None, "json_parse", "Failed to parse LLM response")
                 return None
-            
-            content = json_match.group()
-            content = content.replace('```json', '').replace('```', '').strip()
-            
-            try:
-                repaired = repair_json(content)
-                result = json.loads(repaired)
-                print("✅ JSON repaired successfully")
-            except Exception as e:
-                print(f"⚠️ JSON repair failed: {e}")
-                content = content.replace("'", '"')
-                content = re.sub(r',\s*}', '}', content)
-                content = re.sub(r',\s*]', ']', content)
-                try:
-                    result = json.loads(content)
-                except Exception as e2:
-                    log_validation_failure(None, "json_parse", f"Failed to parse JSON: {e2}")
-                    return None
-            
-            if 'questions' in result and len(result['questions']) > 0:
-                question = result['questions'][0]
-                
-                # Format options immediately
-                options = question.get('options', [])
-                if options:
-                    question['options'] = normalize_options(options)
-                
-                # ===== VALIDATION PIPELINE =====
-                
+
+            questions = self.parser.extract_questions(result)
+
+            if not questions:
+                log_validation_failure(None, "json_parse", "No questions found")
+                return None
+
+            question = questions[0]
+
+            # Format options immediately
+            options = question.get('options', [])
+
+            if options:
+                question['options'] = normalize_options(options)
+
+
+            # ===== VALIDATION PIPELINE =====
+
                 # Stage 1: Structure
                 if not validate_structure(question):
+                    log_validation_failure(
+                        question,
+                        "structure",
+                        "Structure validation failed"
+                    )
                     return None
                 
                 # Stage 2: Content - Grounding (uses supporting_fact)
@@ -634,6 +311,14 @@ Generate 5 different questions now:"""
                 
                 # Stage 3: Semantic
                 if not validate_semantic(question):
+                    log_validation_failure(
+                        question,
+                        "semantic",
+                        "Semantic validation failed"
+                    )
+                    return None
+                
+                if not validate_domain_correctness(question):
                     return None
                 
                 # Normalize correct field
@@ -651,9 +336,15 @@ Generate 5 different questions now:"""
                     print("⚠️ Could not attach grounded explanation for fact-based question")
                     # Continue - we already have a fallback in _attach_grounding_fields
                 
-                # Quality scoring
-                facts = self.cache.get_facts(topic) if hasattr(self.cache, 'get_facts') else []
-                is_acceptable, score, scores = self._check_quality(question, facts)
+                    # Quality scoring
+                    print("Retriever cache type:", type(self.retriever.fact_cache))
+                    print("Retriever has get_facts:", hasattr(self.retriever.fact_cache, "get_facts"))
+
+                    facts = self.retriever.retrieve(
+                        topic=topic,
+                        limit=20
+                    )
+                    is_acceptable, score, scores = self._check_quality(question, facts)
                 
                 if not is_acceptable:
                     print(f"⚠️ Question scored {score:.2f} - below threshold ({self.min_quality_score}), rejecting")
@@ -690,6 +381,8 @@ Requirements:
 7. Correct field must only contain A, B, C, or D.
 8. Explanation must reference the content.
 9. Return ONLY valid JSON.
+10. Randomize the correct answer position.
+11. Do not always place the correct answer in option A.
 
 Example:
 {{
@@ -697,35 +390,30 @@ Example:
     {{
       "question": "What does database normalization reduce?",
       "options": [
-        "A) Redundancy",
-        "B) Processing speed",
-        "C) File size",
+        "A) Processing speed",
+        "B) File size",
+        "C) Redundancy",
         "D) Network traffic"
       ],
-      "correct": "A",
+      "correct": "C",
       "explanation": "Redundancy is correct because database normalization reduces duplicate data."
     }}
   ]
 }}
 
-Generate 1 question now:"""
+Generate 5 questions now:"""
 
         try:
-            response = ollama.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                options={
-                    "temperature":0.2,
-                    "top_p":0.8,
-                    "num_predict":2000,
-                    "stop":["```"]
-                }
-)
-            
-            content = response['message']['content']
+            content = self.llm.generate(
+                prompt,
+                temperature=0.2,
+                top_p=0.8,
+                num_predict=2000,
+                stop=["```"]
+            )
 
             print("RAW RESPONSE:")
-            print(response)
+            print(content)
 
             print(f"CONTENT LENGTH: {len(content)}")
             print(content)  
@@ -745,22 +433,35 @@ Generate 1 question now:"""
                 try:
                     repaired = repair_json(content)
                     result = json.loads(repaired)
-                    print("✅ JSON repaired successfully")
                 except Exception as e:
                     print(f"⚠️ JSON repair failed: {e}")
                     return {"questions": []}
             
-            if 'questions' not in result:
-                if isinstance(result, dict) and 'question' in result:
+                # Normalize every valid JSON format into:
+                # {"questions": [...]}
 
-                    # Repair missing options from bad LLM output
-                    if 'options' not in result:
-                        print("⚠️ LLM forgot options, rejecting question")
+                if isinstance(result, list):
+                    result = {"questions": result}
+
+                elif isinstance(result, dict):
+
+                    if "questions" in result:
+                        pass
+
+                    elif "question" in result:
+
+                        if "options" not in result:
+                            print("⚠️ LLM forgot options, rejecting question")
+                            return {"questions": []}
+
+                        result = {"questions": [result]}
+
+                    else:
+                        print("⚠️ Unknown JSON format")
                         return {"questions": []}
 
-                    result = {"questions": [result]}
-
                 else:
+                    print("⚠️ Invalid JSON root")
                     return {"questions": []}
             
             valid_questions = []
@@ -771,6 +472,14 @@ Generate 1 question now:"""
 
                     # Normalize options first
                     q['options'] = normalize_options(q['options'])
+                    # Reject invented layer taxonomy
+                    if any(
+                        is_layer_phrase(q.get("question", "")) or
+                        is_layer_phrase(str(option))
+                        for option in q.get("options", [])
+                    ):
+                        print("⚠️ Skipping invented layer taxonomy")
+                        continue
 
                    # Reject statements pretending to be questions
                     if 'question' in q:
@@ -809,20 +518,32 @@ Generate 1 question now:"""
                         if not validate_structure(q):
                             print("⚠️ Skipping malformed question")
                             continue
-                    
-                    # Stage 2: Content - Grounding
-                    if not validate_grounding(q, context):
-                        print("⚠️ Skipping ungrounded question")
-                        continue
-                    
-                    # Stage 2: Content - Topic relevance
+
+                    # Get answer text first
                     correct_letter = q.get('correct', '')
-                    correct_text = get_correct_text_from_options(q.get('options', []), correct_letter)
+                    correct_text = get_correct_text_from_options(
+                        q.get('options', []),
+                        correct_letter
+                    )
+
                     supporting_fact = select_supporting_fact(
                         correct_text,
                         supporting_facts,
                         fallback_context=context
                     )
+
+                    # Stage 2: Content - Grounding
+                    if not validate_grounding(
+                        q,
+                        supporting_fact
+                    ):
+                        log_validation_failure(
+                            q,
+                            "grounding",
+                            "Question answer not supported by source content"
+                        )
+                        print("⚠️ Skipping ungrounded question")
+                        continue
                     
                     if not is_relevant_to_topic(
                         q.get('question', ''),
@@ -841,9 +562,29 @@ Generate 1 question now:"""
                     if not validate_semantic(q):
                         print("⚠️ Skipping question due to semantic issues")
                         continue
+
+                    # Stage 3: Domain correctness
+                    if not validate_domain_correctness(q):
+                        log_validation_failure(
+                            q,
+                            "domain",
+                            "Question contains incorrect domain knowledge"
+                        )
+                        print("⚠️ Skipping domain incorrect question")
+                        continue
+
+                    # Stage 4: Explanation validation
+                    if not validate_explanation(q, supporting_fact):
+                        print("⚠️ Skipping invalid explanation")
+                        continue
                     
                     # Normalize correct field
                     if not normalize_and_validate_correct_field(q):
+                        log_validation_failure(
+                            q,
+                            "correct_field",
+                            "Correct answer field could not be matched to options"
+                        )
                         print("⚠️ Skipping question with unresolvable correct field")
                         continue
 
@@ -858,12 +599,25 @@ Generate 1 question now:"""
                         q['supporting_fact'] = normalize_supporting_fact(context[:200] + "...")
                         q['explanation'] = f"{correct_text} is correct based on the content."
 
+                    # Clean LLM-generated text before caching
+                    for field in [
+                        "question",
+                        "explanation",
+                        "correct_text",
+                        "supporting_fact"
+                    ]:
+                        if q.get(field):
+                            q[field] = clean_text(q[field])
+
                     # Required for cache validation
                     q['fact_id'] = f"generated_{abs(hash(q.get('question', '')))}"
                     q['source_note'] = "llm_generated"
                     
                     # Quality scoring
-                    facts = self.cache.get_facts(topic) if hasattr(self.cache, 'get_facts') else []
+                    facts = self.retriever.retrieve(
+                        topic=topic,
+                        limit=20
+                    )
                     is_acceptable, score, scores = self._check_quality(q, facts)
                     
                     if not is_acceptable:
@@ -872,11 +626,33 @@ Generate 1 question now:"""
                     
                     q['_quality_score'] = score
                     q['_quality_scores'] = scores
-                    
+
+
+                    # ===== Duplicate Question Check =====
+                    existing_questions = [
+                        item["question"]
+                        for item in valid_questions
+                    ]
+
+
+                    if is_duplicate_question(
+                        q["question"],
+                        existing_questions
+                    ):
+                        print(
+                            "⚠️ Duplicate question skipped:",
+                            q["question"]
+                        )
+                        continue
+
+
                     valid_questions.append(q)
             
             if valid_questions:
-                valid_questions = filter_similar_questions(valid_questions, threshold=0.5)
+                valid_questions = filter_similar_questions(
+                    valid_questions,
+                    threshold=0.90
+                )
             
             if not valid_questions:
                 print("No valid LLM questions generated, using fact-based fallback...")
@@ -892,29 +668,40 @@ Generate 1 question now:"""
                                     concept_match = re.search(r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})\b', statement)
                                     if concept_match:
                                         concept = concept_match.group(1)
-                            if concept and self._is_valid_concept(concept):
+                            if concept and is_valid_concept(concept):
                                 extracted_concepts.append(concept)
                 
                 if not extracted_concepts:
                     context_concepts = re.findall(r'\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})\b', context)
                     for concept in context_concepts:
-                        if self._is_valid_concept(concept):
+                        if is_valid_concept(concept):
                             extracted_concepts.append(concept)
                 
-                fallback = self._generate_fallback_question(context, topic, extracted_concepts)
+                fallback = generate_fallback_question(context, topic, extracted_concepts, supporting_facts)
                 if fallback:
-                    facts = self.cache.get_facts(topic) if hasattr(self.cache, 'get_facts') else []
+                    facts = self.retriever.retrieve(
+                        topic=topic,
+                        limit=20
+                    )
                     is_acceptable, score, scores = self._check_quality(fallback, facts)
                     if is_acceptable:
                         fallback['_quality_score'] = score
                         fallback['_quality_scores'] = scores
                         fallback['concept'] = fallback.get('correct_text', '')
+                        for field in [
+                            "question",
+                            "explanation",
+                            "correct_text",
+                            "supporting_fact"
+                        ]:
+                            if fallback.get(field):
+                                fallback[field] = clean_text(fallback[field])
                         valid_questions = [fallback]
                     else:
                         print(f"⚠️ Fallback question scored {score:.2f} - below threshold, skipping")
                 else:
                     print("⚠️ No concepts available, using generic fallback...")
-                    generic_fallback = self._generate_generic_fallback(context, topic)
+                    generic_fallback = generate_generic_fallback(context, topic)
                     if generic_fallback:
                         valid_questions = [generic_fallback]
             
@@ -953,17 +740,13 @@ Example:
 Generate 1 fill-in-the-blank question now:"""
 
         try:
-            response = ollama.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                options={
-                    "temperature": 0.3,
-                    "top_p": 0.7,
-                    "num_predict": 800
-                }
+            content = self.llm.generate(
+                prompt,
+                temperature=0.3,
+                top_p=0.7,
+                num_predict=800
             )
-            
-            content = response['message']['content']
+
             print(f"Fill-blank response: {len(content)} characters")
             
             json_match = re.search(r'\{[\s\S]*\}', content)

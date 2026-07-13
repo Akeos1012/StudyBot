@@ -11,8 +11,27 @@ from typing import Dict, List
 
 def normalize(text: str) -> str:
     """Normalize text for comparison."""
-    return " ".join(text.lower().split())
+    text = text.lower()
 
+    replacements = {
+        "what": "",
+        "which": "",
+        "does": "",
+        "is": "",
+        "are": "",
+        "the": "",
+        "of": "",
+        "these": "",
+        "this": "",
+        "that": "",
+        "a": "",
+        "an": "",
+    }
+
+    for word, replacement in replacements.items():
+        text = text.replace(word, replacement)
+
+    return " ".join(text.split())
 
 def similarity(a: str, b: str) -> float:
     """Return similarity score between two strings (0.0–1.0)."""
@@ -22,17 +41,58 @@ def similarity(a: str, b: str) -> float:
 def is_similar_to_pool(
     question: Dict,
     pool: List[Dict],
-    threshold: float = 0.90,
+    threshold: float = 0.80,
 ) -> bool:
-    """
-    Return True if the question is too similar to an existing question.
-    """
-    new_text = question.get("question", "")
+
+    new_question = normalize(question.get("question", ""))
+    new_answer = normalize(
+        question.get("correct_text") 
+     or question.get("correct", "")
+    )
+    new_fact = normalize(question.get("supporting_fact", ""))
+
 
     for existing in pool:
-        old_text = existing.get("question", "")
 
-        if similarity(new_text, old_text) >= threshold:
+        old_question = normalize(existing.get("question", ""))
+        old_answer = normalize(
+            existing.get("correct_text")
+            or existing.get("correct", "")
+        )
+        old_fact = normalize(existing.get("supporting_fact", ""))
+
+
+        question_similarity = similarity(
+            new_question,
+            old_question
+        )
+
+        answer_similarity = similarity(
+            new_answer,
+            old_answer
+        )
+
+        fact_similarity = similarity(
+            new_fact,
+            old_fact
+        )
+
+
+        if (
+            question_similarity >= threshold
+            and answer_similarity >= 0.85
+        ):
+            print(f"❌ Removed duplicate question: {new_question}")
             return True
 
+
+        if (
+            answer_similarity >= 0.95
+            and fact_similarity >= 0.85
+        ):
+            print(f"❌ Removed duplicate concept: {new_question}")
+            return True
+
+
     return False
+

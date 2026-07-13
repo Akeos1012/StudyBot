@@ -66,7 +66,7 @@ REJECTED_PATTERNS = [
     r'^\s*[-*+]\s*',  # Markdown bullets
     r'^\s*\d+\.\s*',  # Numbered lists
     r'\[\[(.*?)\]\]',  # Wiki links (preserve text)
-    r'\b(how|why|what|when|where)\s',  # Question words at start
+    r'^\s*(how|why|what|when|where)\s',  # Question words at start
     r'\b(conclusion|summary|overview|references)\b',  # Section words
 ]
 

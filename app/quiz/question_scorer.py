@@ -244,6 +244,28 @@ class QuestionScorer:
         question_text = question.get('question', '').lower()
         correct_lower = correct_text.lower()
 
+        negative_question = any(
+            word in question_text
+            for word in [
+                "not",
+                "does not",
+                "do not",
+                "except",
+                "false",
+                "incorrect"
+            ]
+        )
+
+        if negative_question:
+            scores.append(0.8)
+
+        elif correct_lower in question_text:
+            # Direct concept question is acceptable
+            scores.append(1.0)
+
+        else:
+            scores.append(0.8)
+            
         # Level 1: Exact concept reference
         if correct_lower in question_text:
             scores.append(1.0)

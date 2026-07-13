@@ -8,13 +8,16 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [answers, setAnswers] = useState({});
   const [showResults, setShowResults] = useState(false);
-  const [quizType, setQuizType] = useState('multiple'); // 'multiple' or 'fillblank'
 
   // Load topics on startup
   useEffect(() => {
-    api.getTopics().then(data => {
-      setTopics(data.topics || []);
-    });
+    api.getTopics()
+      .then(data => {
+        setTopics(data.topics || []);
+      })
+      .catch(error => {
+        console.error("Failed loading topics:", error);
+      });
   }, []);
 
   // Generate quiz - make ONE API call for 3 questions
@@ -27,7 +30,12 @@ function App() {
     setShowResults(false);
     
     try {
-      const data = await api.generateQuiz(selectedTopic, 3);
+      const data = await api.generateQuiz({
+        topic: selectedTopic,
+        count: 3,
+        difficulty: "medium",
+        fresh: false
+      });
       if (data.questions && data.questions.length > 0) {
         setQuestions(data.questions);
       }
@@ -37,7 +45,6 @@ function App() {
     setLoading(false);
   };
 
-  // ============ FIX: Robust letter extraction ============
   const extractLetter = (optionText) => {
     if (!optionText) return '';
     // Handle: "A) Memoization", "A. Memoization", "A - Memoization", "A Memoization"
@@ -53,7 +60,6 @@ function App() {
     return '';
   };
 
-  // ============ FIX: Handle answer selection with robust parsing ============
   const selectAnswer = (questionIndex, optionText) => {
     if (showResults) return;
     
@@ -81,17 +87,23 @@ function App() {
     setShowResults(true);
   };
 
-  // ============ FIX: Calculate score with robust comparison ============
   const calculateScore = () => {
     let correct = 0;
+
     questions.forEach((q, index) => {
-      const userAnswer = String(answers[index] || '').trim().toUpperCase();
-      const correctAnswer = String(q.correct || '').trim().toUpperCase();
-      // Handle both letter and text answers
+      const userAnswer = String(answers[index] || '')
+        .trim()
+        .toUpperCase();
+
+      const correctAnswer = String(q.correct || '')
+        .trim()
+        .toUpperCase();
+
       if (userAnswer === correctAnswer) {
         correct++;
       }
     });
+
     return correct;
   };
 
@@ -102,10 +114,6 @@ function App() {
     return userAnswer.toLowerCase().trim() === q.correct.toLowerCase().trim();
   };
 
-  // ============ NEW: Check if question is a fallback ============
-  const isFallbackQuestion = (q) => {
-    return q._is_fallback === true;
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -199,7 +207,6 @@ function App() {
             </div>
 
             {questions.map((q, index) => {
-              const isFallback = isFallbackQuestion(q);
               const isFillBlank = q.type === 'fillblank' || (q.question && q.question.includes('_______'));
               
               return (
@@ -211,11 +218,6 @@ function App() {
                     <div className="flex-1">
                       <p className="text-lg font-medium text-gray-800">{q.question}</p>
                       {/* ============ NEW: Fallback badge ============ */}
-                      {isFallback && (
-                        <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                          🤖 AI Fallback Question
-                        </span>
-                      )}
                     </div>
                   </div>
                   
@@ -279,17 +281,18 @@ function App() {
                   {showResults && !isFillBlank && (
                     <>
                       <div className={`mt-4 ml-11 p-4 rounded-xl ${
-                        answers[index] === q.correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                        String(answers[index]).toUpperCase() === String(q.correct).toUpperCase() ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
                       }`}>
                         <div className="flex items-start">
                           <span className="text-lg mr-2">
-                            {answers[index] === q.correct ? '✅' : '❌'}
+                            {String(answers[index]).toUpperCase() === String(q.correct).toUpperCase() ? '✅' : '❌'}
                           </span>
                           <div>
                             <p className={`font-semibold ${
-                              answers[index] === q.correct ? 'text-green-700' : 'text-red-700'
+                              String(answers[index]).toUpperCase() === String(q.correct).toUpperCase() ?'text-green-700' : 'text-red-700'
                             }`}>
-                              {answers[index] === q.correct ? 'Correct!' : `Incorrect. Answer: ${q.correct}`}
+                              {String(answers[index]).toUpperCase() === String(q.correct).toUpperCase()
+                                ? 'Correct!' : `Incorrect. Answer: ${q.correct}`}
                             </p>
                             <p className="text-gray-700 mt-1">
                               <span className="font-medium">💡 Explanation:</span> {q.explanation}
@@ -299,9 +302,9 @@ function App() {
                       </div>
                       
                       {/* Source Note */}
-                      {q.source_notes && q.source_notes.length > 0 && (
+                      {q.supporting_fact && (
                         <div className="mt-2 ml-11 text-xs text-gray-400 border-t border-gray-100 pt-2">
-                          📖 Source: {q.source_notes.join(', ')}
+                          📖 Source Fact: {q.supporting_fact}
                         </div>
                       )}
                     </>

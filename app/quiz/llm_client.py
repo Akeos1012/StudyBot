@@ -171,23 +171,34 @@ class LLMClient:
         if not messages:
             raise LLMResponseError("Messages list cannot be empty")
         
-        options = self._build_options(temperature, top_p, num_predict)
+        options = self._build_options(
+            temperature,
+            top_p,
+            num_predict,
+            **kwargs
+        )
         
         try:
             response = ollama.chat(
                 model=self.model,
                 messages=messages,
-                options=options,
-                **kwargs
+                options=options
             )
         except Exception as e:
             logger.error(f"LLM connection error: {e}")
             raise LLMConnectionError(f"Failed to connect to LLM: {e}")
         
-        if not response or not isinstance(response, dict):
+        if not response:
             raise LLMResponseError("LLM returned an invalid response format")
-        
-        content = response.get('message', {}).get('content', '')
+
+        if hasattr(response, "message"):
+            content = response.message.content
+
+        elif isinstance(response, dict):
+            content = response.get("message", {}).get("content", "")
+
+        else:
+            raise LLMResponseError("Unknown LLM response format")
         
         if not content:
             raise LLMResponseError("LLM returned an empty response")
@@ -202,7 +213,8 @@ class LLMClient:
         self,
         temperature: Optional[float],
         top_p: Optional[float],
-        num_predict: Optional[int]
+        num_predict: Optional[int],
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Build the options dict for ollama.chat.
@@ -231,8 +243,15 @@ class LLMClient:
             options["num_predict"] = num_predict
         else:
             options["num_predict"] = self.num_predict
+
+        # Additional Ollama options
+        options.update(kwargs)
         
         return options
+
+
+    
+    
     
     # =========================================================================
     # CONVENIENCE METHODS

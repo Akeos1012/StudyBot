@@ -18,7 +18,22 @@ from typing import List, Dict, Any, Optional, Type, Union
 
 # ===== Schema Field Definitions =====
 REQUIRED_FIELDS = ["question", "options", "correct", "explanation"]
-OPTIONAL_FIELDS = ["_is_fallback", "source_notes", "concept_type", "difficulty"]
+OPTIONAL_FIELDS = [
+    "_is_fallback",
+    "source_notes",
+    "concept_type",
+    "difficulty",
+
+    # Grounding fields
+    "correct_text",
+    "supporting_fact",
+    "fact_id",
+    "source_note",
+
+    # Quality metadata
+    "_quality_score",
+    "_quality_scores"
+]
 
 # ===== Field Type Mappings =====
 FIELD_TYPES: Dict[str, Union[Type, List[Type]]] = {
@@ -26,10 +41,21 @@ FIELD_TYPES: Dict[str, Union[Type, List[Type]]] = {
     "options": list,
     "correct": str,
     "explanation": str,
+
     "_is_fallback": bool,
     "source_notes": list,
     "concept_type": str,
-    "difficulty": float,
+    "difficulty": str,
+
+    # Grounding fields
+    "correct_text": str,
+    "supporting_fact": str,
+    "fact_id": str,
+    "source_note": str,
+
+    # Quality metadata
+    "_quality_score": float,
+    "_quality_scores": dict,
 }
 
 # ===== Validation Constants =====

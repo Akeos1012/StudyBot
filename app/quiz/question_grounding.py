@@ -83,6 +83,7 @@ def normalize_supporting_fact(text: str) -> str:
         return ""
 
     cleaned = str(text).strip()
+    cleaned = re.sub( r'([a-z])([A-Z])',r'\1 \2', cleaned)
     cleaned = re.sub(r'^\s*#+\s*', '', cleaned)
     cleaned = re.sub(r'^\s*[-*+]\s*', '', cleaned)
     cleaned = re.sub(r'^\s*\d+\.\s*', '', cleaned)
@@ -90,6 +91,7 @@ def normalize_supporting_fact(text: str) -> str:
     cleaned = re.sub(r'[*_`>#]', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     cleaned = cleaned.rstrip(' .')
+    
 
     if not cleaned:
         return ""
@@ -125,9 +127,9 @@ def attach_grounding_fields(question: Dict[str, Any], correct_text: str, support
             context=question['supporting_fact'],
             facts=[{'supporting_fact': question['supporting_fact']}]
         )
-        if explanation and not question.get('explanation'):
+        if explanation:
             question['explanation'] = explanation
-        return True
+            return True
     
     # Fallback: create a simple grounded explanation
     if correct_text and question['supporting_fact']:

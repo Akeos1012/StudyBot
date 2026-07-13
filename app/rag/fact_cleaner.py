@@ -38,8 +38,13 @@ def clean_text(text: str) -> str:
     # Remove markdown formatting
     text = re.sub(r"[*_#`]", "", text)
 
+    # Remove markdown list bullets
+    text = re.sub(r"^\\-\s*", "", text)
+    text = re.sub(r"^-\s*", "", text)
+
     # Normalize spaces
     text = re.sub(r"\s+", " ", text)
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
 
     return text.strip()
 

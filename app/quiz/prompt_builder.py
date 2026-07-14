@@ -17,7 +17,6 @@ This is a lightweight text-generation utility used by the quiz pipeline.
 import random
 from typing import Optional, List
 
-
 # ============================================================================
 # CONSTANTS
 # ============================================================================
@@ -31,35 +30,35 @@ QUESTION_TEMPLATES = {
         "Which term matches: {definition}?",
         "What concept is defined as {definition}?",
         "In the context of {topic}, what is {concept}?",
-        "How would you define {concept}?"
+        "How would you define {concept}?",
     ],
     "comparison": [
         "What is the main difference between {concept} and {distractor1}?",
         "How does {concept} differ from {distractor1}?",
         "Which statement best describes the relationship between {concept} and {distractor1}?",
         "What distinguishes {concept} from {distractor1}?",
-        "Between {concept} and {distractor1}, which one {context}?"
+        "Between {concept} and {distractor1}, which one {context}?",
     ],
     "application": [
         "In what scenario would {concept} be most useful?",
         "When would you use {concept}?",
         "Which situation best demonstrates the use of {concept}?",
         "What problem does {concept} solve?",
-        "What is the primary use case for {concept}?"
+        "What is the primary use case for {concept}?",
     ],
     "scenario": [
         "A developer needs to {scenario}. Which concept fits best?",
         "You are building a system that requires {scenario}. Which concept should you use?",
         "A student is trying to understand {scenario}. Which concept explains this?",
         "Which concept would help solve: {scenario}?",
-        "Given the task of {scenario}, which approach would you use?"
+        "Given the task of {scenario}, which approach would you use?",
     ],
     "reverse_definition": [
         "What term is defined as: {definition}?",
         "Which concept matches this description: {definition}?",
         "What do we call {definition}?",
-        "Fill in the blank: {definition} is known as _______."
-    ]
+        "Fill in the blank: {definition} is known as _______.",
+    ],
 }
 
 # Scenario mappings for generating realistic contexts
@@ -88,6 +87,7 @@ SCENARIO_MAP = {
 # ============================================================================
 # PUBLIC API
 # ============================================================================
+
 
 class PromptBuilder:
     """
@@ -120,7 +120,7 @@ class PromptBuilder:
         definition: str,
         question_type: str = "definition",
         topic: str = "Unknown",
-        distractors: Optional[List[str]] = None
+        distractors: Optional[List[str]] = None,
     ) -> str:
         """
         Build a question text from a fact.
@@ -164,7 +164,7 @@ class PromptBuilder:
             concept=concept,
             definition=definition,
             topic=topic,
-            distractors=distractors
+            distractors=distractors,
         )
 
         return question_text
@@ -227,7 +227,7 @@ class PromptBuilder:
         concept: str,
         definition: str,
         topic: str,
-        distractors: Optional[List[str]] = None
+        distractors: Optional[List[str]] = None,
     ) -> str:
         """
         Format a template with the given values.
@@ -283,7 +283,7 @@ class PromptBuilder:
             "is more scalable",
             "is more reliable",
             "provides better performance",
-            "is easier to implement"
+            "is easier to implement",
         ]
         return random.choice(contexts)
 
@@ -292,12 +292,13 @@ class PromptBuilder:
 # CONVENIENCE FUNCTION
 # ============================================================================
 
+
 def build_question(
     concept: str,
     definition: str,
     question_type: str = "definition",
     topic: str = "Unknown",
-    distractors: Optional[List[str]] = None
+    distractors: Optional[List[str]] = None,
 ) -> str:
     """
     Convenience function for building a single question.
@@ -325,7 +326,7 @@ def build_question(
         definition=definition,
         question_type=question_type,
         topic=topic,
-        distractors=distractors
+        distractors=distractors,
     )
 
 
@@ -342,7 +343,7 @@ if __name__ == "__main__":
     test_data = {
         "concept": "Cloud Storage",
         "definition": "Stores digital data on remote servers accessed over the internet",
-        "topic": "Cloud"
+        "topic": "Cloud",
     }
 
     for qtype in builder.get_question_types():
@@ -351,7 +352,7 @@ if __name__ == "__main__":
             definition=test_data["definition"],
             question_type=qtype,
             topic=test_data["topic"],
-            distractors=["Local Storage", "Network Storage", "Distributed Storage"]
+            distractors=["Local Storage", "Network Storage", "Distributed Storage"],
         )
         print(f"{qtype}: {question}")
 

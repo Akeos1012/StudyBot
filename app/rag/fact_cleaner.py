@@ -13,7 +13,6 @@ Handles:
 
 import re
 
-
 ENCODING_FIXES = {
     "â€“": "-",
     "â€”": "-",
@@ -44,7 +43,7 @@ def clean_text(text: str) -> str:
 
     # Normalize spaces
     text = re.sub(r"\s+", " ", text)
-    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
 
     return text.strip()
 
@@ -75,12 +74,7 @@ def clean_definition(concept: str, definition: str) -> str:
     # Remove duplicated concept prefix
     pattern = rf"^{re.escape(concept)}\s*[-:]\s*"
 
-    definition = re.sub(
-        pattern,
-        "",
-        definition,
-        flags=re.IGNORECASE
-    )
+    definition = re.sub(pattern, "", definition, flags=re.IGNORECASE)
 
     return definition.strip()
 
@@ -92,22 +86,15 @@ def clean_fact(fact: dict) -> dict:
 
     cleaned = fact.copy()
 
-    concept = clean_concept(
-        cleaned.get("concept", "")
-    )
+    concept = clean_concept(cleaned.get("concept", ""))
 
-    definition = clean_definition(
-        concept,
-        cleaned.get("definition", "")
-    )
+    definition = clean_definition(concept, cleaned.get("definition", ""))
 
     cleaned["concept"] = concept
     cleaned["definition"] = definition
 
     if "sentence" in cleaned:
-        cleaned["sentence"] = clean_text(
-            cleaned["sentence"]
-        )
+        cleaned["sentence"] = clean_text(cleaned["sentence"])
 
     return cleaned
 
@@ -117,8 +104,4 @@ def clean_facts(facts: list) -> list:
     Clean multiple facts.
     """
 
-    return [
-        clean_fact(fact)
-        for fact in facts
-        if fact
-    ]
+    return [clean_fact(fact) for fact in facts if fact]

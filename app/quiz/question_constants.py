@@ -4,7 +4,6 @@ Shared constants used across the quiz system.
 
 from typing import Final
 
-
 # ==========================================
 # GENERIC EXPLANATION PHRASES
 # ==========================================
@@ -41,7 +40,6 @@ MAX_EXPLANATION_WORDS: Final[int] = 24
 # ==========================================
 
 CONCEPT_HIERARCHY: Final[dict[str, list[str]]] = {
-
     "cloud": [
         "cloud storage",
         "cloud database",
@@ -56,7 +54,6 @@ CONCEPT_HIERARCHY: Final[dict[str, list[str]]] = {
         "object storage",
         "file storage",
     ],
-
     "database": [
         "sql",
         "nosql",
@@ -68,7 +65,6 @@ CONCEPT_HIERARCHY: Final[dict[str, list[str]]] = {
         "indexing",
         "normalization",
     ],
-
     "algorithm": [
         "sorting",
         "searching",
@@ -79,7 +75,6 @@ CONCEPT_HIERARCHY: Final[dict[str, list[str]]] = {
         "divide and conquer",
         "complexity",
     ],
-
     "programming": [
         "function",
         "variable",

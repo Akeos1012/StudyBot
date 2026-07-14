@@ -16,12 +16,17 @@ This module should remain small and focused on validation logic only.
 """
 
 from typing import List, Optional
-from .fact_schema import ConceptType, can_compare_concepts, get_question_types_for_type, get_question_difficulty
-
+from .fact_schema import (
+    ConceptType,
+    can_compare_concepts,
+    get_question_types_for_type,
+    get_question_difficulty,
+)
 
 # ============================================================================
 # MAIN VALIDATOR CLASS
 # ============================================================================
+
 
 class OntologyValidator:
     """
@@ -170,6 +175,7 @@ class OntologyValidator:
 # CONVENIENCE FUNCTIONS
 # ============================================================================
 
+
 def validate_concept_type(type_name: str) -> bool:
     """
     Convenience function to validate a concept type.
@@ -227,16 +233,28 @@ if __name__ == "__main__":
     print(f"validate_type('invalid'): {validator.validate_type('invalid')}")
 
     # Test get_compatible_question_types
-    print(f"\nget_compatible_question_types('algorithm'): {validator.get_compatible_question_types('algorithm')}")
-    print(f"get_compatible_question_types('metric'): {validator.get_compatible_question_types('metric')}")
+    print(
+        f"\nget_compatible_question_types('algorithm'): {validator.get_compatible_question_types('algorithm')}"
+    )
+    print(
+        f"get_compatible_question_types('metric'): {validator.get_compatible_question_types('metric')}"
+    )
 
     # Test get_question_difficulty
-    print(f"\nget_question_difficulty('algorithm', 'definition'): {validator.get_question_difficulty('algorithm', 'definition')}")
-    print(f"get_question_difficulty('model', 'scenario'): {validator.get_question_difficulty('model', 'scenario')}")
+    print(
+        f"\nget_question_difficulty('algorithm', 'definition'): {validator.get_question_difficulty('algorithm', 'definition')}"
+    )
+    print(
+        f"get_question_difficulty('model', 'scenario'): {validator.get_question_difficulty('model', 'scenario')}"
+    )
 
     # Test can_compare
-    print(f"\ncan_compare('algorithm', 'algorithm'): {validator.can_compare('algorithm', 'algorithm')}")
-    print(f"can_compare('algorithm', 'model'): {validator.can_compare('algorithm', 'model')}")
+    print(
+        f"\ncan_compare('algorithm', 'algorithm'): {validator.can_compare('algorithm', 'algorithm')}"
+    )
+    print(
+        f"can_compare('algorithm', 'model'): {validator.can_compare('algorithm', 'model')}"
+    )
 
     # Test get_type_info
     print(f"\nget_type_info('algorithm'): {validator.get_type_info('algorithm')}")

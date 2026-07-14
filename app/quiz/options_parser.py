@@ -21,7 +21,6 @@ This module does NOT contain:
 import re
 from typing import List, Tuple, Dict
 
-
 # ============================================================================
 # CONSTANTS
 # ============================================================================
@@ -30,17 +29,18 @@ from typing import List, Tuple, Dict
 OPTION_LETTERS = ["A", "B", "C", "D"]
 
 # Common separators used in options
-SEPARATORS = [')', '.', '-', '–']
+SEPARATORS = [")", ".", "-", "–"]
 
 # Compiled regex patterns for performance
-LETTER_PATTERN = re.compile(r'^([A-D])\s*[\)\.\-\s]')
-OPTION_PATTERN = re.compile(r'^[A-D]\s*[\)\.\-\s]+\s*(.*)')
-PREFIX_PATTERN = re.compile(r'^[A-D]\s*[\)\.\-\s]+')
+LETTER_PATTERN = re.compile(r"^([A-D])\s*[\)\.\-\s]")
+OPTION_PATTERN = re.compile(r"^[A-D]\s*[\)\.\-\s]+\s*(.*)")
+PREFIX_PATTERN = re.compile(r"^[A-D]\s*[\)\.\-\s]+")
 
 
 # ============================================================================
 # CORE PARSING FUNCTIONS
 # ============================================================================
+
 
 def extract_option_parts(option: str) -> Tuple[str, str]:
     """
@@ -106,7 +106,7 @@ def extract_option_parts(option: str) -> Tuple[str, str]:
     # Last resort: try to extract a letter from the start
     letter_match = LETTER_PATTERN.match(option_stripped)
     if letter_match:
-        return letter_match.group(1), option_stripped[letter_match.end():].strip()
+        return letter_match.group(1), option_stripped[letter_match.end() :].strip()
 
     return "", option_stripped
 
@@ -172,6 +172,7 @@ def format_option(letter: str, text: str) -> str:
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
+
 
 def get_correct_text_from_options(options: List[str], correct_letter: str) -> str:
     """
@@ -258,13 +259,13 @@ def normalize_options(options: List[str]) -> List[str]:
 
         if not text:
             # If text extraction failed, try to strip any prefix
-            text = PREFIX_PATTERN.sub('', opt.strip())
+            text = PREFIX_PATTERN.sub("", opt.strip())
 
         if text:
             normalized.append(format_option(letter, text))
         else:
             # If no text remains, use the original stripped of any prefix
-            cleaned = PREFIX_PATTERN.sub('', opt.strip())
+            cleaned = PREFIX_PATTERN.sub("", opt.strip())
             if cleaned:
                 normalized.append(format_option(letter, cleaned))
             else:
@@ -299,6 +300,7 @@ def options_to_dict(options: List[str]) -> Dict[str, str]:
 # ============================================================================
 # VALIDATION FUNCTIONS
 # ============================================================================
+
 
 def validate_options_format(options: List[str]) -> bool:
     """

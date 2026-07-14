@@ -24,7 +24,7 @@ from .options_parser import (
     extract_option_text,
     get_correct_text_from_options,
     get_distractor_texts,
-    validate_options_format
+    validate_options_format,
 )
 from ..models.question_schema import validate_question_schema
 
@@ -41,7 +41,7 @@ DEFAULT_WEIGHTS = {
     "semantic": 0.30,
     "distractors": 0.25,
     "formatting": 0.10,
-    "readability": 0.10
+    "readability": 0.10,
 }
 
 # Minimum acceptable overall score
@@ -49,10 +49,35 @@ DEFAULT_MIN_SCORE = 0.6
 
 # Stop words for semantic analysis
 STOP_WORDS = {
-    'the', 'this', 'that', 'with', 'from', 'have', 'will', 'they',
-    'what', 'when', 'where', 'which', 'their', 'there', 'about',
-    'concept', 'using', 'used', 'also', 'can', 'for', 'are', 'has',
-    'its', 'them', 'than', 'then', 'these', 'those'
+    "the",
+    "this",
+    "that",
+    "with",
+    "from",
+    "have",
+    "will",
+    "they",
+    "what",
+    "when",
+    "where",
+    "which",
+    "their",
+    "there",
+    "about",
+    "concept",
+    "using",
+    "used",
+    "also",
+    "can",
+    "for",
+    "are",
+    "has",
+    "its",
+    "them",
+    "than",
+    "then",
+    "these",
+    "those",
 }
 
 # Ideal overlap range for distractors
@@ -69,6 +94,7 @@ MAX_EXPLANATION_LENGTH = 200
 # ============================================================================
 # MAIN CLASS
 # ============================================================================
+
 
 class QuestionScorer:
     """
@@ -90,8 +116,11 @@ class QuestionScorer:
             # Use the question
     """
 
-    def __init__(self, weights: Optional[Dict[str, float]] = None,
-                 min_acceptable_score: float = DEFAULT_MIN_SCORE):
+    def __init__(
+        self,
+        weights: Optional[Dict[str, float]] = None,
+        min_acceptable_score: float = DEFAULT_MIN_SCORE,
+    ):
         """
         Initialize the question scorer.
 
@@ -106,8 +135,9 @@ class QuestionScorer:
     # PUBLIC API
     # =========================================================================
 
-    def score_question(self, question: Dict[str, Any],
-                       facts: Optional[List[Dict[str, Any]]] = None) -> Tuple[float, Dict[str, float], List[str]]:
+    def score_question(
+        self, question: Dict[str, Any], facts: Optional[List[Dict[str, Any]]] = None
+    ) -> Tuple[float, Dict[str, float], List[str]]:
         """
         Score a question on quality metrics.
 
@@ -143,7 +173,7 @@ class QuestionScorer:
             "semantic": semantic_score,
             "distractors": distractor_score,
             "formatting": formatting_score,
-            "readability": readability_score
+            "readability": readability_score,
         }
 
         # Collect issues
@@ -154,8 +184,9 @@ class QuestionScorer:
 
         return total, scores, issues
 
-    def is_acceptable(self, question: Dict[str, Any],
-                      facts: Optional[List[Dict[str, Any]]] = None) -> Tuple[bool, float, Dict[str, float], List[str]]:
+    def is_acceptable(
+        self, question: Dict[str, Any], facts: Optional[List[Dict[str, Any]]] = None
+    ) -> Tuple[bool, float, Dict[str, float], List[str]]:
         """
         Check if a question meets the quality threshold.
 
@@ -170,8 +201,9 @@ class QuestionScorer:
         is_acceptable = total >= self.min_acceptable_score
         return is_acceptable, total, scores, issues
 
-    def get_detailed_report(self, question: Dict[str, Any],
-                           facts: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def get_detailed_report(
+        self, question: Dict[str, Any], facts: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
         """
         Get a detailed quality report for a question.
 
@@ -189,8 +221,8 @@ class QuestionScorer:
         """
         total, scores, issues = self.score_question(question, facts)
 
-        correct_letter = question.get('correct', '')
-        options = question.get('options', [])
+        correct_letter = question.get("correct", "")
+        options = question.get("options", [])
         correct_answer = get_correct_text_from_options(options, correct_letter)
 
         return {
@@ -201,7 +233,7 @@ class QuestionScorer:
             "correct_answer": correct_answer,
             "correct_letter": correct_letter,
             "num_options": len(options),
-            "question_preview": question.get('question', '')[:100] + "..."
+            "question_preview": question.get("question", "")[:100] + "...",
         }
 
     # =========================================================================
@@ -234,26 +266,19 @@ class QuestionScorer:
         scores = []
 
         # Check: Question references the answer
-        answer_letter = question.get('correct', '')
-        options = question.get('options', [])
+        answer_letter = question.get("correct", "")
+        options = question.get("options", [])
         correct_text = get_correct_text_from_options(options, answer_letter)
 
         if not correct_text:
             return 0.0
 
-        question_text = question.get('question', '').lower()
+        question_text = question.get("question", "").lower()
         correct_lower = correct_text.lower()
 
         negative_question = any(
             word in question_text
-            for word in [
-                "not",
-                "does not",
-                "do not",
-                "except",
-                "false",
-                "incorrect"
-            ]
+            for word in ["not", "does not", "do not", "except", "false", "incorrect"]
         )
 
         if negative_question:
@@ -265,19 +290,17 @@ class QuestionScorer:
 
         else:
             scores.append(0.8)
-            
+
         # Level 1: Exact concept reference
         if correct_lower in question_text:
             scores.append(1.0)
         else:
             # Level 2: Word overlap
             correct_words = set(
-                w for w in correct_lower.split()
-                if len(w) > 3 and w not in STOP_WORDS
+                w for w in correct_lower.split() if len(w) > 3 and w not in STOP_WORDS
             )
             question_words = set(
-                w for w in question_text.split()
-                if len(w) > 3 and w not in STOP_WORDS
+                w for w in question_text.split() if len(w) > 3 and w not in STOP_WORDS
             )
 
             if correct_words:
@@ -287,7 +310,7 @@ class QuestionScorer:
                 scores.append(0.5)
 
         # Check: Explanation supports the answer
-        explanation = question.get('explanation', '').lower()
+        explanation = question.get("explanation", "").lower()
         if explanation:
             # Check if explanation mentions the correct answer
             if correct_lower in explanation:
@@ -295,11 +318,12 @@ class QuestionScorer:
             else:
                 # Check for word overlap
                 explanation_words = set(
-                    w for w in explanation.split()
-                    if len(w) > 3 and w not in STOP_WORDS
+                    w for w in explanation.split() if len(w) > 3 and w not in STOP_WORDS
                 )
                 if correct_words and explanation_words:
-                    overlap = len(correct_words & explanation_words) / len(correct_words)
+                    overlap = len(correct_words & explanation_words) / len(
+                        correct_words
+                    )
                     scores.append(min(overlap * 1.5, 1.0))
                 else:
                     scores.append(0.5)
@@ -318,8 +342,8 @@ class QuestionScorer:
         - Distractors are reasonably plausible
         - No duplicate options
         """
-        answer_letter = question.get('correct', '')
-        options = question.get('options', [])
+        answer_letter = question.get("correct", "")
+        options = question.get("options", [])
 
         if not options or len(options) != 4:
             return 0.0
@@ -383,7 +407,7 @@ class QuestionScorer:
         - No empty strings
         - No malformed labels
         """
-        options = question.get('options', [])
+        options = question.get("options", [])
 
         if not options or len(options) != 4:
             return 0.0
@@ -420,27 +444,38 @@ class QuestionScorer:
         scores = []
 
         # Check question length
-        q_text = question.get('question', '')
+        q_text = question.get("question", "")
         if q_text and len(q_text) <= MAX_QUESTION_LENGTH:
             scores.append(1.0)
         elif q_text:
             # Penalize long questions
-            scores.append(max(0.3, 1.0 - (len(q_text) - MAX_QUESTION_LENGTH) / MAX_QUESTION_LENGTH))
+            scores.append(
+                max(
+                    0.3, 1.0 - (len(q_text) - MAX_QUESTION_LENGTH) / MAX_QUESTION_LENGTH
+                )
+            )
         else:
             scores.append(0.0)
 
         # Check explanation length
-        explanation = question.get('explanation', '')
+        explanation = question.get("explanation", "")
         if explanation and len(explanation) <= MAX_EXPLANATION_LENGTH:
             scores.append(1.0)
         elif explanation:
-            scores.append(max(0.3, 1.0 - (len(explanation) - MAX_EXPLANATION_LENGTH) / MAX_EXPLANATION_LENGTH))
+            scores.append(
+                max(
+                    0.3,
+                    1.0
+                    - (len(explanation) - MAX_EXPLANATION_LENGTH)
+                    / MAX_EXPLANATION_LENGTH,
+                )
+            )
         else:
             # No explanation is a schema issue, not readability
             scores.append(0.5)
 
         # Check if question ends with ?
-        if q_text and q_text.strip().endswith('?'):
+        if q_text and q_text.strip().endswith("?"):
             scores.append(1.0)
         else:
             scores.append(0.0)
@@ -451,8 +486,9 @@ class QuestionScorer:
     # ISSUE COLLECTION
     # =========================================================================
 
-    def _collect_issues(self, question: Dict[str, Any],
-                       scores: Dict[str, float]) -> List[str]:
+    def _collect_issues(
+        self, question: Dict[str, Any], scores: Dict[str, float]
+    ) -> List[str]:
         """
         Collect issues that affected the score.
 
@@ -467,35 +503,40 @@ class QuestionScorer:
 
         # Schema issues
         if scores.get("schema", 0) < 1.0:
-            required = ['question', 'options', 'correct', 'explanation']
+            required = ["question", "options", "correct", "explanation"]
             missing = [f for f in required if f not in question]
             if missing:
                 issues.append(f"Missing required fields: {', '.join(missing)}")
 
-            options = question.get('options', [])
+            options = question.get("options", [])
             if len(options) != 4:
                 issues.append(f"Expected 4 options, got {len(options)}")
 
-            if question.get('correct', '') not in ['A', 'B', 'C', 'D']:
+            if question.get("correct", "") not in ["A", "B", "C", "D"]:
                 issues.append(f"Invalid correct answer: {question.get('correct')}")
 
         # Semantic issues
         if scores.get("semantic", 0) < 0.7:
             issues.append("Question may not be semantically consistent with the answer")
 
-            answer_letter = question.get('correct', '')
-            options = question.get('options', [])
+            answer_letter = question.get("correct", "")
+            options = question.get("options", [])
             correct_text = get_correct_text_from_options(options, answer_letter)
 
-            if correct_text and correct_text.lower() not in question.get('question', '').lower():
+            if (
+                correct_text
+                and correct_text.lower() not in question.get("question", "").lower()
+            ):
                 issues.append("Question does not explicitly mention the correct answer")
 
         # Distractor issues
         if scores.get("distractors", 0) < 0.6:
-            issues.append("Distractor quality is low (may be too similar or too different)")
+            issues.append(
+                "Distractor quality is low (may be too similar or too different)"
+            )
 
-            answer_letter = question.get('correct', '')
-            options = question.get('options', [])
+            answer_letter = question.get("correct", "")
+            options = question.get("options", [])
             distractors = get_distractor_texts(options, answer_letter)
 
             if distractors:
@@ -509,11 +550,11 @@ class QuestionScorer:
 
         # Readability issues
         if scores.get("readability", 0) < 0.7:
-            q_text = question.get('question', '')
+            q_text = question.get("question", "")
             if len(q_text) > MAX_QUESTION_LENGTH:
                 issues.append(f"Question is too long ({len(q_text)} chars)")
 
-            if q_text and not q_text.strip().endswith('?'):
+            if q_text and not q_text.strip().endswith("?"):
                 issues.append("Question does not end with a question mark")
 
         return issues

@@ -11,7 +11,6 @@ This module provides:
 
 from typing import List, Dict, Any, Optional, Type, Union
 
-
 # ============================================================================
 # CONSTANTS
 # ============================================================================
@@ -23,16 +22,14 @@ OPTIONAL_FIELDS = [
     "source_notes",
     "concept_type",
     "difficulty",
-
     # Grounding fields
     "correct_text",
     "supporting_fact",
     "fact_id",
     "source_note",
-
     # Quality metadata
     "_quality_score",
-    "_quality_scores"
+    "_quality_scores",
 ]
 
 # ===== Field Type Mappings =====
@@ -41,18 +38,15 @@ FIELD_TYPES: Dict[str, Union[Type, List[Type]]] = {
     "options": list,
     "correct": str,
     "explanation": str,
-
     "_is_fallback": bool,
     "source_notes": list,
     "concept_type": str,
     "difficulty": str,
-
     # Grounding fields
     "correct_text": str,
     "supporting_fact": str,
     "fact_id": str,
     "source_note": str,
-
     # Quality metadata
     "_quality_score": float,
     "_quality_scores": dict,
@@ -74,6 +68,7 @@ ERROR_OPTION_EMPTY = "Option at index {index} is empty or contains only whitespa
 # ============================================================================
 # INTERNAL HELPERS
 # ============================================================================
+
 
 def _normalize_correct(correct: Any) -> str:
     """Normalize the correct answer to uppercase, stripped."""
@@ -97,18 +92,18 @@ def _validate_options(options: Any) -> bool:
     """Validate the options field."""
     if not isinstance(options, list):
         return False
-    
+
     if len(options) != VALID_OPTIONS_COUNT:
         print(ERROR_INVALID_OPTIONS_COUNT.format(count=len(options)))
         return False
-    
+
     for i, opt in enumerate(options):
         if not isinstance(opt, str):
             return False
         if not opt.strip():
             print(ERROR_OPTION_EMPTY.format(index=i))
             return False
-    
+
     return True
 
 
@@ -127,12 +122,12 @@ def _validate_required_fields(question: Dict[str, Any]) -> bool:
         if field not in question:
             print(ERROR_MISSING_REQUIRED.format(field=field))
             return False
-        
+
         value = question.get(field)
         if not value or not str(value).strip():
             print(ERROR_EMPTY_FIELD.format(field=field))
             return False
-    
+
     return True
 
 
@@ -143,13 +138,15 @@ def _validate_optional_fields(question: Dict[str, Any]) -> bool:
             if not _validate_field_type(question[field], field):
                 expected = _get_field_type(field)
                 actual = type(question[field]).__name__
-                print(ERROR_WRONG_TYPE.format(
-                    field=field,
-                    expected_type=expected.__name__ if expected else "unknown",
-                    actual_type=actual
-                ))
+                print(
+                    ERROR_WRONG_TYPE.format(
+                        field=field,
+                        expected_type=expected.__name__ if expected else "unknown",
+                        actual_type=actual,
+                    )
+                )
                 return False
-    
+
     return True
 
 
@@ -167,13 +164,13 @@ QUESTION_SCHEMA = {
 def validate_question_schema(question: Dict[str, Any]) -> bool:
     """
     Validate a question against the schema.
-    
+
     Args:
         question: Dictionary containing the question data
-        
+
     Returns:
         True if valid, False otherwise with error messages printed
-    
+
     Validation checks:
         1. All required fields are present and non-empty
         2. Optional fields have correct types if present
@@ -184,20 +181,20 @@ def validate_question_schema(question: Dict[str, Any]) -> bool:
     # Step 1: Validate required fields
     if not _validate_required_fields(question):
         return False
-    
+
     # Step 2: Validate field types for optional fields
     if not _validate_optional_fields(question):
         return False
-    
+
     # Step 3: Validate options
     if not _validate_options(question.get("options", [])):
         return False
-    
+
     # Step 4: Validate correct field (will be normalized after validation)
     if not _validate_correct(question.get("correct", "")):
         return False
-    
+
     # Step 5: Normalize the correct field in place
     question["correct"] = _normalize_correct(question["correct"])
-    
+
     return True

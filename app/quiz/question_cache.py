@@ -40,6 +40,7 @@ CACHE_METADATA_KEY = "__metadata__"
 # MAIN CLASS
 # ============================================================================
 
+
 class QuestionCache:
     """
     Persistent storage layer for generated questions.
@@ -50,8 +51,9 @@ class QuestionCache:
     All validation and deduplication is delegated to separate modules.
     """
 
-    def __init__(self, cache_file: str = DEFAULT_CACHE_FILE,
-                 pool_size: int = DEFAULT_POOL_SIZE):
+    def __init__(
+        self, cache_file: str = DEFAULT_CACHE_FILE, pool_size: int = DEFAULT_POOL_SIZE
+    ):
         """
         Initialize the question cache.
 
@@ -78,7 +80,7 @@ class QuestionCache:
             return
 
         try:
-            with open(self.cache_file, 'r', encoding='utf-8') as f:
+            with open(self.cache_file, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
 
             # Validate metadata
@@ -86,14 +88,18 @@ class QuestionCache:
             version = metadata.get("version", 0)
 
             if version != CACHE_VERSION:
-                logger.warning(f"Cache version mismatch (v{version} != v{CACHE_VERSION}), rebuilding cache")
+                logger.warning(
+                    f"Cache version mismatch (v{version} != v{CACHE_VERSION}), rebuilding cache"
+                )
                 self.cache = {}
                 self._initialize_metadata()
                 return
 
             self.cache = loaded
             total_questions = self._total_questions()
-            logger.info(f"Loaded {total_questions} cached questions across {len(self.cache)} pools")
+            logger.info(
+                f"Loaded {total_questions} cached questions across {len(self.cache)} pools"
+            )
 
         except json.JSONDecodeError as e:
             logger.error(f"Corrupt cache file: {e}, resetting cache")
@@ -109,18 +115,24 @@ class QuestionCache:
             # Update metadata before saving
             self._update_metadata()
 
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
+            with open(self.cache_file, "w", encoding="utf-8") as f:
                 json.dump(self.cache, f, indent=2, ensure_ascii=False)
 
             total_questions = self._total_questions()
-            logger.info(f"Saved {total_questions} questions across {len(self.cache)} pools")
+            logger.info(
+                f"Saved {total_questions} questions across {len(self.cache)} pools"
+            )
 
         except Exception as e:
             logger.error(f"Could not save cache: {e}")
 
-    def get_key(self, topic: str, subtopic: str = "",
-                difficulty: str = "medium",
-                qtype: str = "multiple") -> str:
+    def get_key(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        qtype: str = "multiple",
+    ) -> str:
         """
         Generate a cache key from parameters.
 
@@ -136,9 +148,13 @@ class QuestionCache:
         key_str = f"{topic}_{subtopic}_{difficulty}_{qtype}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    def get_pool(self, topic: str, subtopic: str = "",
-                 difficulty: str = "medium",
-                 qtype: str = "multiple") -> List[Dict[str, Any]]:
+    def get_pool(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        qtype: str = "multiple",
+    ) -> List[Dict[str, Any]]:
         """
         Get the full stored pool for a topic.
 
@@ -166,8 +182,14 @@ class QuestionCache:
 
         return valid_pool
 
-    def add_to_pool(self, topic: str, subtopic: str, difficulty: str,
-                    qtype: str, new_questions: List[Dict[str, Any]]) -> None:
+    def add_to_pool(
+        self,
+        topic: str,
+        subtopic: str,
+        difficulty: str,
+        qtype: str,
+        new_questions: List[Dict[str, Any]],
+    ) -> None:
         """
         Add new questions to the pool.
 
@@ -212,12 +234,18 @@ class QuestionCache:
         self.cache[key] = existing
         self.save_cache()
 
-        logger.info(f"Added {len(unique_questions)} new questions to pool for {topic} (pool size: {len(existing)})")
+        logger.info(
+            f"Added {len(unique_questions)} new questions to pool for {topic} (pool size: {len(existing)})"
+        )
 
-    def sample(self, topic: str, subtopic: str = "",
-               difficulty: str = "medium",
-               qtype: str = "multiple",
-               count: int = 3) -> Optional[List[Dict[str, Any]]]:
+    def sample(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        qtype: str = "multiple",
+        count: int = 3,
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Randomly sample questions from the pool.
 
@@ -234,14 +262,20 @@ class QuestionCache:
         pool = self.get_pool(topic, subtopic, difficulty, qtype)
 
         if len(pool) < count:
-            logger.info(f"Pool too small ({len(pool)} < {count}), caller should generate more")
+            logger.info(
+                f"Pool too small ({len(pool)} < {count}), caller should generate more"
+            )
             return None
 
         return random.sample(pool, count)
 
-    def get_pool_size(self, topic: str, subtopic: str = "",
-                      difficulty: str = "medium",
-                      qtype: str = "multiple") -> int:
+    def get_pool_size(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        qtype: str = "multiple",
+    ) -> int:
         """
         Get the current pool size.
 
@@ -263,9 +297,13 @@ class QuestionCache:
         self.save_cache()
         logger.info("All cache cleared")
 
-    def invalidate_topic_cache(self, topic: str, subtopic: str = "",
-                               difficulty: str = "medium",
-                               qtype: str = "multiple") -> None:
+    def invalidate_topic_cache(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        qtype: str = "multiple",
+    ) -> None:
         """
         Safely clear a specific topic pool.
 
@@ -273,9 +311,13 @@ class QuestionCache:
         """
         self.clear_topic(topic, subtopic, difficulty, qtype)
 
-    def clear_topic(self, topic: str, subtopic: str = "",
-                    difficulty: str = "medium",
-                    qtype: str = "multiple") -> None:
+    def clear_topic(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        qtype: str = "multiple",
+    ) -> None:
         """
         Clear cache for a specific topic.
 
@@ -311,12 +353,12 @@ class QuestionCache:
             return {
                 "topic": topic,
                 "pool_size": len(pool),
-                "questions": [q.get('question', '')[:50] + '...' for q in pool[:5]]
+                "questions": [q.get("question", "")[:50] + "..." for q in pool[:5]],
             }
         else:
             return {
                 "total_pools": len(self.cache) - 1,  # Exclude metadata
-                "total_questions": self._total_questions()
+                "total_questions": self._total_questions(),
             }
 
     # =========================================================================
@@ -331,7 +373,7 @@ class QuestionCache:
                 "created": datetime.now().isoformat(),
                 "updated": datetime.now().isoformat(),
                 "total_pools": 0,
-                "total_questions": 0
+                "total_questions": 0,
             }
 
     def _update_metadata(self) -> None:
@@ -341,7 +383,9 @@ class QuestionCache:
 
         self.cache[CACHE_METADATA_KEY]["version"] = CACHE_VERSION
         self.cache[CACHE_METADATA_KEY]["updated"] = datetime.now().isoformat()
-        self.cache[CACHE_METADATA_KEY]["total_pools"] = len(self.cache) - 1  # Exclude metadata
+        self.cache[CACHE_METADATA_KEY]["total_pools"] = (
+            len(self.cache) - 1
+        )  # Exclude metadata
         self.cache[CACHE_METADATA_KEY]["total_questions"] = self._total_questions()
 
     def _total_questions(self) -> int:
@@ -352,8 +396,9 @@ class QuestionCache:
                 total += len(value)
         return total
 
-    def _deduplicate_questions(self, new_questions: List[Dict[str, Any]],
-                               existing_pool: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _deduplicate_questions(
+        self, new_questions: List[Dict[str, Any]], existing_pool: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Deduplicate new questions against existing pool.
 
@@ -371,7 +416,9 @@ class QuestionCache:
         for q in new_questions:
             # Check if question is similar to any in the pool
             if is_similar_to_pool(q, existing_pool):
-                logger.debug(f"Skipping text-similar question: {q.get('question', '')[:40]}...")
+                logger.debug(
+                    f"Skipping text-similar question: {q.get('question', '')[:40]}..."
+                )
                 continue
 
             unique.append(q)

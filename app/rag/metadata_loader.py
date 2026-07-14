@@ -52,24 +52,29 @@ FRONTMATTER_END = "---"
 # EXCEPTIONS
 # ============================================================================
 
+
 class MetadataLoaderError(Exception):
     """Base exception for metadata loader errors."""
+
     pass
 
 
 class CacheLoadError(MetadataLoaderError):
     """Raised when cache cannot be loaded."""
+
     pass
 
 
 class CacheSaveError(MetadataLoaderError):
     """Raised when cache cannot be saved."""
+
     pass
 
 
 # ============================================================================
 # MAIN CLASS
 # ============================================================================
+
 
 class MetadataLoader:
     """
@@ -154,8 +159,9 @@ class MetadataLoader:
             logger.error(f"Could not load note {note_path}: {e}")
             return ""
 
-    def get_truncated_content(self, note_path: str,
-                             max_chars: int = DEFAULT_TRUNCATE_CHARS) -> str:
+    def get_truncated_content(
+        self, note_path: str, max_chars: int = DEFAULT_TRUNCATE_CHARS
+    ) -> str:
         """
         Get content truncated at a sentence boundary.
 
@@ -175,7 +181,7 @@ class MetadataLoader:
         truncated = content[:max_chars]
 
         # Find sentence boundary
-        sentence_endings = ['. ', '? ', '! ', '.\n', '?\n', '!\n']
+        sentence_endings = [". ", "? ", "! ", ".\n", "?\n", "!\n"]
         last_end = -1
 
         for ending in sentence_endings:
@@ -184,15 +190,15 @@ class MetadataLoader:
                 last_end = pos
 
         if last_end > 0:
-            return truncated[:last_end + 1]
+            return truncated[: last_end + 1]
 
         # No sentence boundary found, cut at space near limit
         if max_chars > MIN_CONTENT_FOR_TRUNCATE:
-            last_space = truncated.rfind(' ')
+            last_space = truncated.rfind(" ")
             if last_space > max_chars - 50:
-                return truncated[:last_space] + '...'
+                return truncated[:last_space] + "..."
 
-        return truncated + '...'
+        return truncated + "..."
 
     def get_notes_by_topic(self, topic: str) -> List[Dict[str, Any]]:
         """
@@ -245,7 +251,8 @@ class MetadataLoader:
             self.load_metadata()
 
         return [
-            n for n in self.metadata
+            n
+            for n in self.metadata
             if n["topic"].lower() == topic.lower()
             and n.get("subtopic", "").lower() == subtopic.lower()
         ]
@@ -323,7 +330,7 @@ class MetadataLoader:
             return False
 
         try:
-            with open(self.metadata_file, 'r', encoding='utf-8') as f:
+            with open(self.metadata_file, "r", encoding="utf-8") as f:
                 self.metadata = json.load(f)
             logger.info(f"Loaded {len(self.metadata)} notes from cache")
             return True
@@ -351,7 +358,7 @@ class MetadataLoader:
             return True
 
         try:
-            with open(self.file_index_file, 'r', encoding='utf-8') as f:
+            with open(self.file_index_file, "r", encoding="utf-8") as f:
                 self.file_index = json.load(f)
         except Exception:
             return True
@@ -384,7 +391,7 @@ class MetadataLoader:
             MD5 hash of the file content
         """
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 content = f.read(8192)  # Read first 8KB
                 return hashlib.md5(content).hexdigest()
         except Exception:
@@ -397,11 +404,11 @@ class MetadataLoader:
 
         try:
             # Save metadata
-            with open(self.metadata_file, 'w', encoding='utf-8') as f:
+            with open(self.metadata_file, "w", encoding="utf-8") as f:
                 json.dump(self.metadata, f, indent=2, ensure_ascii=False)
 
             # Save file index
-            with open(self.file_index_file, 'w', encoding='utf-8') as f:
+            with open(self.file_index_file, "w", encoding="utf-8") as f:
                 json.dump(self.file_index, f, indent=2, ensure_ascii=False)
 
             logger.info(f"Saved metadata cache with {len(self.metadata)} notes")
@@ -462,7 +469,7 @@ class MetadataLoader:
             Metadata dictionary, or None if extraction fails
         """
         try:
-            with open(md_file, 'r', encoding='utf-8') as f:
+            with open(md_file, "r", encoding="utf-8") as f:
                 # Read enough for frontmatter + title
                 content = f.read(FRONTMATTER_READ_SIZE)
 
@@ -485,7 +492,7 @@ class MetadataLoader:
                 "subtopic": subtopic,
                 "title": md_file.stem,
                 "content_length": content_length,
-                "metadata": frontmatter
+                "metadata": frontmatter,
             }
 
         except Exception as e:
@@ -507,7 +514,7 @@ class MetadataLoader:
             Dictionary of frontmatter values
         """
         # Remove BOM if present
-        if content.startswith('\ufeff'):
+        if content.startswith("\ufeff"):
             content = content[1:]
 
         if not content.startswith(FRONTMATTER_START):
@@ -520,19 +527,19 @@ class MetadataLoader:
         frontmatter_text = parts[1]
         frontmatter = {}
 
-        for line in frontmatter_text.split('\n'):
+        for line in frontmatter_text.split("\n"):
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
 
-            if ':' in line:
-                key, value = line.split(':', 1)
+            if ":" in line:
+                key, value = line.split(":", 1)
                 key = key.strip()
                 value = value.strip()
 
                 # Parse list values
-                if value.startswith('[') and value.endswith(']'):
-                    value = [v.strip() for v in value[1:-1].split(',')]
+                if value.startswith("[") and value.endswith("]"):
+                    value = [v.strip() for v in value[1:-1].split(",")]
 
                 frontmatter[key] = value
 
@@ -556,7 +563,7 @@ class MetadataLoader:
         if not path.exists():
             return ""
 
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Remove frontmatter

@@ -1,8 +1,4 @@
-def build_fact_question_prompt(
-    fact: str,
-    answer: str,
-    topic: str
-) -> str:
+def build_fact_question_prompt(fact: str, answer: str, topic: str) -> str:
 
     return f"""You are a computer science tutor creating a multiple-choice question.
 

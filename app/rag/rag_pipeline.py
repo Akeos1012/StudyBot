@@ -32,11 +32,7 @@ class RAGPipeline:
         self.grounder = GroundingProcessor()
         self.cache = FactCache(notes_path)
 
-        self.retriever = Retriever(
-            self.cache,
-            use_embeddings=False
-        )
-
+        self.retriever = Retriever(self.cache, use_embeddings=False)
 
     def build(self):
         """
@@ -49,98 +45,57 @@ class RAGPipeline:
         print("\n📚 Loading metadata...")
         metadata = self.metadata_loader.load_metadata()
 
-        print(
-            f"✅ Loaded {len(metadata)} notes"
-        )
-
+        print(f"✅ Loaded {len(metadata)} notes")
 
         # Step 2: Extract facts
         print("\n🔎 Extracting facts...")
 
         raw_facts = self.extractor.extract_all()
 
+        total = sum(len(v) for v in raw_facts.values())
 
-        total = sum(
-            len(v)
-            for v in raw_facts.values()
-        )
-
-        print(
-            f"✅ Extracted {total} facts"
-        )
-
+        print(f"✅ Extracted {total} facts")
 
         # Step 3: Ground facts
 
         print("\n⚙️ Grounding facts...")
 
-
         grounded = {}
 
         for topic, facts in raw_facts.items():
 
-            processed = self.grounder.ground_all(
-                facts
-            )
+            processed = self.grounder.ground_all(facts)
 
             if processed:
                 grounded[topic] = processed
 
+        total_grounded = sum(len(v) for v in grounded.values())
 
-        total_grounded = sum(
-            len(v)
-            for v in grounded.values()
-        )
-
-        print(
-            f"✅ Grounded {total_grounded} facts"
-        )
-
+        print(f"✅ Grounded {total_grounded} facts")
 
         # Step 4: Clean facts
 
         print("\n🧹 Cleaning facts...")
 
-
-        cleaned = {
-            topic: clean_facts(facts)
-            for topic, facts in grounded.items()
-        }
-
+        cleaned = {topic: clean_facts(facts) for topic, facts in grounded.items()}
 
         # Step 5: Save cache
 
         print("\n💾 Saving cache...")
 
-
         self.cache.cache = cleaned
         self.cache.save_cache()
 
-
         print("\n🎉 RAG Pipeline completed")
-
 
         return cleaned
 
-
-
-    def search(
-        self,
-        query: str,
-        topic=None,
-        limit=5
-    ) -> List[Dict[str, Any]]:
-
+    def search(self, query: str, topic=None, limit=5) -> List[Dict[str, Any]]:
         """
         Search knowledge base.
         """
 
-        return self.retriever.query(
-            query,
-            topic,
-            limit
-        )
-
+        return self.retriever.query(query, topic, limit)
 
 
 if __name__ == "__main__":
@@ -149,15 +104,9 @@ if __name__ == "__main__":
 
     pipeline.build()
 
-
     print("\n🔍 Testing retrieval")
 
-    results = pipeline.search(
-        "cloud storage"
-    )
-
+    results = pipeline.search("cloud storage")
 
     for fact in results:
-        print(
-            f"- {fact['concept']}"
-        )
+        print(f"- {fact['concept']}")

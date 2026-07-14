@@ -16,13 +16,14 @@ from enum import Enum
 import re
 from collections import Counter
 
-
 # ============================================================================
 # ENUMS
 # ============================================================================
 
+
 class ConceptType(Enum):
     """Semantic types for concepts to prevent invalid comparisons."""
+
     ALGORITHM = "algorithm"
     MODEL = "model"
     METRIC = "metric"
@@ -61,164 +62,285 @@ class ConceptType(Enum):
 
 # ===== Required and Optional Schema Keys =====
 REQUIRED_KEYS = ["concept", "definition", "topic", "source"]
-OPTIONAL_KEYS = ["difficulty_hint", "weight", "is_header", "is_bullet", "sentence", "concept_type"]
+OPTIONAL_KEYS = [
+    "difficulty_hint",
+    "weight",
+    "is_header",
+    "is_bullet",
+    "sentence",
+    "concept_type",
+]
 DIFFICULTY_HINTS = ["easy", "medium", "hard"]
 
 # ===== Weak Concepts (for filtering) =====
 WEAK_CONCEPTS = {
-    "example", "examples", "technique", "techniques",
-    "approach", "approaches", "method", "methods",
-    "process", "processes", "concept", "concepts",
-    "system", "systems", "layer", "layers",
-    "overview", "summary", "introduction", "conclusion",
-    "types", "categories", "classification"
+    "example",
+    "examples",
+    "technique",
+    "techniques",
+    "approach",
+    "approaches",
+    "method",
+    "methods",
+    "process",
+    "processes",
+    "concept",
+    "concepts",
+    "system",
+    "systems",
+    "layer",
+    "layers",
+    "overview",
+    "summary",
+    "introduction",
+    "conclusion",
+    "types",
+    "categories",
+    "classification",
 }
 
 # ===== Hard Rejections =====
 HARD_INVALID_CONCEPTS = {
-    "Examples", "Overview", "Summary", "Notes", "Definition",
-    "Introduction", "Conclusion", "References", "Table of Contents",
-    "Index", "Glossary", "Bibliography", "Acknowledgements"
+    "Examples",
+    "Overview",
+    "Summary",
+    "Notes",
+    "Definition",
+    "Introduction",
+    "Conclusion",
+    "References",
+    "Table of Contents",
+    "Index",
+    "Glossary",
+    "Bibliography",
+    "Acknowledgements",
 }
 
 # ===== Soft Warnings =====
 SOFT_WARNING_CONCEPTS = {
-    "Concept", "Example", "Method", "Technique", "Approach",
-    "Process", "System", "Layer", "Types", "Categories",
-    "Classification", "Techniques", "Methods", "Approaches",
-    "Processes", "Pattern", "Model", "Framework", "Architecture"
+    "Concept",
+    "Example",
+    "Method",
+    "Technique",
+    "Approach",
+    "Process",
+    "System",
+    "Layer",
+    "Types",
+    "Categories",
+    "Classification",
+    "Techniques",
+    "Methods",
+    "Approaches",
+    "Processes",
+    "Pattern",
+    "Model",
+    "Framework",
+    "Architecture",
 }
 
 # ===== Invalid Patterns (regex) =====
 INVALID_CONCEPT_PATTERNS = [
-    r'^types?\s+of',
-    r'^why\s',
-    r'^how\s',
-    r'.*layer$',
-    r'.*&.*layer',
-    r'^simple analogy',
-    r'^performance',
-    r'^overview',
-    r'^summary',
-    r'^introduction',
-    r'^conclusion',
-    r'^references',
-    r'^examples?$',
-    r'^technique examples?$',
-    r'^notes$',
-    r'^definition$',
+    r"^types?\s+of",
+    r"^why\s",
+    r"^how\s",
+    r".*layer$",
+    r".*&.*layer",
+    r"^simple analogy",
+    r"^performance",
+    r"^overview",
+    r"^summary",
+    r"^introduction",
+    r"^conclusion",
+    r"^references",
+    r"^examples?$",
+    r"^technique examples?$",
+    r"^notes$",
+    r"^definition$",
 ]
 
 # ===== Concept Type Keywords =====
 CONCEPT_TYPE_KEYWORDS = {
     ConceptType.ALGORITHM: [
-        "sort", "search", "algorithm", "traversal", "recursion",
-        "divide and conquer", "dynamic programming", "greedy",
-        "backtracking", "branch and bound"
+        "sort",
+        "search",
+        "algorithm",
+        "traversal",
+        "recursion",
+        "divide and conquer",
+        "dynamic programming",
+        "greedy",
+        "backtracking",
+        "branch and bound",
     ],
     ConceptType.MODEL: [
-        "network", "neural", "model", "regression", "classification",
-        "clustering", "deep learning", "machine learning", "cnn",
-        "rnn", "transformer", "bert", "gpt"
+        "network",
+        "neural",
+        "model",
+        "regression",
+        "classification",
+        "clustering",
+        "deep learning",
+        "machine learning",
+        "cnn",
+        "rnn",
+        "transformer",
+        "bert",
+        "gpt",
     ],
     ConceptType.METRIC: [
-        "complexity", "time", "space", "accuracy", "precision",
-        "recall", "f1", "performance", "efficiency", "big o",
-        "memory", "speed", "throughput", "latency"
+        "complexity",
+        "time",
+        "space",
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "performance",
+        "efficiency",
+        "big o",
+        "memory",
+        "speed",
+        "throughput",
+        "latency",
     ],
     ConceptType.DATA_STRUCTURE: [
-        "array", "list", "tree", "graph", "hash", "map", "set",
-        "queue", "stack", "heap", "trie", "linked list"
+        "array",
+        "list",
+        "tree",
+        "graph",
+        "hash",
+        "map",
+        "set",
+        "queue",
+        "stack",
+        "heap",
+        "trie",
+        "linked list",
     ],
     ConceptType.SYSTEM: [
-        "system", "architecture", "infrastructure", "platform",
-        "database", "storage", "server", "client", "api"
+        "system",
+        "architecture",
+        "infrastructure",
+        "platform",
+        "database",
+        "storage",
+        "server",
+        "client",
+        "api",
     ],
     ConceptType.PROCESS: [
-        "process", "pipeline", "workflow", "lifecycle", "development",
-        "deployment", "integration", "testing", "monitoring"
+        "process",
+        "pipeline",
+        "workflow",
+        "lifecycle",
+        "development",
+        "deployment",
+        "integration",
+        "testing",
+        "monitoring",
     ],
     ConceptType.FRAMEWORK: [
-        "framework", "library", "sdk", "toolkit", "platform",
-        "tensorflow", "pytorch", "scikit", "django", "react"
+        "framework",
+        "library",
+        "sdk",
+        "toolkit",
+        "platform",
+        "tensorflow",
+        "pytorch",
+        "scikit",
+        "django",
+        "react",
     ],
     ConceptType.PARADIGM: [
-        "paradigm", "functional", "object-oriented", "procedural",
-        "declarative", "imperative", "symbolic", "connectionist"
+        "paradigm",
+        "functional",
+        "object-oriented",
+        "procedural",
+        "declarative",
+        "imperative",
+        "symbolic",
+        "connectionist",
     ],
     ConceptType.APPLICATION: [
-        "vision", "nlp", "speech", "recognition", "recommendation",
-        "generation", "translation", "summarization"
-    ]
+        "vision",
+        "nlp",
+        "speech",
+        "recognition",
+        "recommendation",
+        "generation",
+        "translation",
+        "summarization",
+    ],
 }
 
 # ===== Type -> Question Type Mapping =====
 _QUESTION_TYPE_MAP = {
-    'algorithm': ['definition', 'comparison', 'application'],
-    'model': ['definition', 'application', 'scenario'],
-    'metric': ['definition', 'comparison'],
-    'process': ['definition', 'scenario'],
-    'concept': ['definition', 'scenario'],
-    'data_structure': ['definition', 'application'],
-    'framework': ['definition', 'comparison'],
-    'language': ['definition'],
-    'paradigm': ['definition', 'comparison'],
-    'application': ['scenario', 'application']
+    "algorithm": ["definition", "comparison", "application"],
+    "model": ["definition", "application", "scenario"],
+    "metric": ["definition", "comparison"],
+    "process": ["definition", "scenario"],
+    "concept": ["definition", "scenario"],
+    "data_structure": ["definition", "application"],
+    "framework": ["definition", "comparison"],
+    "language": ["definition"],
+    "paradigm": ["definition", "comparison"],
+    "application": ["scenario", "application"],
 }
 
 # ===== Type -> Difficulty Map =====
 _QUESTION_DIFFICULTY_MAP = {
-    ('algorithm', 'definition'): 0.3,
-    ('algorithm', 'comparison'): 0.6,
-    ('algorithm', 'application'): 0.7,
-    ('model', 'definition'): 0.4,
-    ('model', 'application'): 0.6,
-    ('model', 'scenario'): 0.8,
-    ('metric', 'definition'): 0.5,
-    ('metric', 'comparison'): 0.7,
-    ('process', 'definition'): 0.4,
-    ('process', 'scenario'): 0.7,
-    ('concept', 'definition'): 0.3,
-    ('concept', 'scenario'): 0.6,
+    ("algorithm", "definition"): 0.3,
+    ("algorithm", "comparison"): 0.6,
+    ("algorithm", "application"): 0.7,
+    ("model", "definition"): 0.4,
+    ("model", "application"): 0.6,
+    ("model", "scenario"): 0.8,
+    ("metric", "definition"): 0.5,
+    ("metric", "comparison"): 0.7,
+    ("process", "definition"): 0.4,
+    ("process", "scenario"): 0.7,
+    ("concept", "definition"): 0.3,
+    ("concept", "scenario"): 0.6,
 }
 
 # ===== Type Hierarchy =====
 _TYPE_HIERARCHY = {
-    'algorithm': {
-        'parent': None,
-        'children': ['sorting', 'searching', 'optimization', 'dynamic_programming'],
-        'level': 1
+    "algorithm": {
+        "parent": None,
+        "children": ["sorting", "searching", "optimization", "dynamic_programming"],
+        "level": 1,
     },
-    'model': {
-        'parent': None,
-        'children': ['neural_network', 'transformer', 'regression', 'classification'],
-        'level': 1
+    "model": {
+        "parent": None,
+        "children": ["neural_network", "transformer", "regression", "classification"],
+        "level": 1,
     },
-    'metric': {
-        'parent': None,
-        'children': ['complexity', 'performance', 'accuracy'],
-        'level': 1
+    "metric": {
+        "parent": None,
+        "children": ["complexity", "performance", "accuracy"],
+        "level": 1,
     },
-    'process': {
-        'parent': None,
-        'children': ['training', 'inference', 'optimization'],
-        'level': 1
+    "process": {
+        "parent": None,
+        "children": ["training", "inference", "optimization"],
+        "level": 1,
     },
-    'concept': {
-        'parent': None,
-        'children': ['paradigm', 'framework', 'architecture'],
-        'level': 1
+    "concept": {
+        "parent": None,
+        "children": ["paradigm", "framework", "architecture"],
+        "level": 1,
     },
-    'data_structure': {
-        'parent': 'algorithm',
-        'children': ['array', 'tree', 'graph', 'hash'],
-        'level': 2
+    "data_structure": {
+        "parent": "algorithm",
+        "children": ["array", "tree", "graph", "hash"],
+        "level": 2,
     },
-    'framework': {
-        'parent': 'model',
-        'children': ['tensorflow', 'pytorch', 'sklearn'],
-        'level': 2
-    }
+    "framework": {
+        "parent": "model",
+        "children": ["tensorflow", "pytorch", "sklearn"],
+        "level": 2,
+    },
 }
 
 # ===== Compatibility Map =====
@@ -233,12 +355,13 @@ _COMPATIBILITY_MAP = {
     "framework": ["framework", "system", "model"],
     "language": ["language", "paradigm"],
     "paradigm": ["paradigm", "process", "concept"],
-    "application": ["application", "system"]
+    "application": ["application", "system"],
 }
 
 # ============================================================================
 # INTERNAL HELPERS
 # ============================================================================
+
 
 def _is_hard_invalid_concept(concept: str) -> bool:
     """Check if concept is in the hard reject list."""
@@ -263,23 +386,23 @@ def _has_duplicate_words(concept: str) -> bool:
 def _has_redundant_pattern(concept: str) -> bool:
     """
     Check if concept contains redundant word patterns.
-    
+
     FIX: Only detects TRUE redundancy (words appearing multiple times),
     not legitimate multi-word concepts.
     """
     concept_lower = concept.lower()
     words = concept_lower.split()
-    
+
     # Check if any word appears more than once (true redundancy)
     word_counts = {}
     for word in words:
         word_counts[word] = word_counts.get(word, 0) + 1
-    
+
     # If any word appears more than once, it's redundant
     for count in word_counts.values():
         if count > 1:
             return True
-    
+
     return False
 
 
@@ -291,12 +414,13 @@ def _is_soft_warning_concept(concept: str) -> bool:
 def _is_generic_layer(concept: str) -> bool:
     """Check if concept is a generic layer term."""
     concept_lower = concept.lower()
-    return 'layer' in concept_lower and len(concept_lower.split()) == 1
+    return "layer" in concept_lower and len(concept_lower.split()) == 1
 
 
 # ============================================================================
 # VALIDATION RULES
 # ============================================================================
+
 
 def validate_concept_name(concept: str) -> bool:
     """
@@ -364,14 +488,15 @@ def validate_fact(fact: Dict[str, Any]) -> bool:
 # NORMALIZATION
 # ============================================================================
 
+
 def _extract_concept(fact: Dict[str, Any]) -> Optional[str]:
     """Extract concept from fact using multiple possible keys."""
     concept = (
-        fact.get("concept") or
-        fact.get("answer") or
-        fact.get("statement") or
-        fact.get("name") or
-        fact.get("title")
+        fact.get("concept")
+        or fact.get("answer")
+        or fact.get("statement")
+        or fact.get("name")
+        or fact.get("title")
     )
     return str(concept).strip() if concept else None
 
@@ -379,11 +504,11 @@ def _extract_concept(fact: Dict[str, Any]) -> Optional[str]:
 def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
     """Extract definition from fact using multiple possible keys."""
     definition = (
-        fact.get("definition") or
-        fact.get("sentence") or
-        fact.get("description") or
-        fact.get("content") or
-        fact.get("text")
+        fact.get("definition")
+        or fact.get("sentence")
+        or fact.get("description")
+        or fact.get("content")
+        or fact.get("text")
     )
     return str(definition).strip() if definition else None
 
@@ -431,7 +556,7 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "difficulty_hint": fact.get("difficulty_hint", "medium"),
         "weight": fact.get("weight", 5),
         "is_header": fact.get("is_header", False),
-        "is_bullet": fact.get("is_bullet", False)
+        "is_bullet": fact.get("is_bullet", False),
     }
 
 
@@ -439,12 +564,13 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 # FACT CREATION
 # ============================================================================
 
+
 def create_fact(
     concept: str,
     definition: str,
     topic: str = "Unknown",
     source: str = "Unknown",
-    concept_type: Optional[str] = None
+    concept_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a new fact with the correct schema."""
     if not validate_concept_name(concept):
@@ -463,13 +589,14 @@ def create_fact(
         "difficulty_hint": "medium",
         "weight": 5,
         "is_header": False,
-        "is_bullet": False
+        "is_bullet": False,
     }
 
 
 # ============================================================================
 # TYPE DETECTION
 # ============================================================================
+
 
 def detect_concept_type(concept: str, definition: str = "") -> str:
     """Auto-detect the concept type based on keywords."""
@@ -490,6 +617,7 @@ def detect_concept_type(concept: str, definition: str = "") -> str:
 # WEAK CONCEPT DETECTION
 # ============================================================================
 
+
 def is_weak_concept(concept: str) -> bool:
     """Check if a concept is likely weak or invalid."""
     concept_lower = concept.lower()
@@ -502,6 +630,7 @@ def is_weak_concept(concept: str) -> bool:
 # ============================================================================
 # TYPE COMPARISON HELPERS
 # ============================================================================
+
 
 def can_compare_concepts(type_a: str, type_b: str) -> bool:
     """Check if two concept types can be meaningfully compared."""
@@ -522,9 +651,10 @@ def get_type_hierarchy() -> Dict[str, Dict[str, Any]]:
 # QUESTION HELPERS
 # ============================================================================
 
+
 def get_question_types_for_type(concept_type: str) -> List[str]:
     """Get recommended question types for a concept type."""
-    return _QUESTION_TYPE_MAP.get(concept_type, ['definition'])
+    return _QUESTION_TYPE_MAP.get(concept_type, ["definition"])
 
 
 def get_question_difficulty(concept_type: str, question_type: str) -> float:
@@ -535,6 +665,7 @@ def get_question_difficulty(concept_type: str, question_type: str) -> float:
 # ============================================================================
 # FACT CLASS
 # ============================================================================
+
 
 class Fact:
     """Fact object with type-aware comparison support."""
@@ -573,7 +704,7 @@ class Fact:
     def weight(self) -> int:
         return self.data.get("weight", 5)
 
-    def can_compare_with(self, other: 'Fact') -> bool:
+    def can_compare_with(self, other: "Fact") -> bool:
         """Check if this fact can be meaningfully compared with another."""
         return can_compare_concepts(self.concept_type, other.concept_type)
 
@@ -596,6 +727,7 @@ class Fact:
 # DATA CLEANING HELPERS
 # ============================================================================
 
+
 def _suggest_fix(concept: str) -> str:
     """Suggest a fix for a corrupted concept."""
     # Remove duplicate words
@@ -606,13 +738,13 @@ def _suggest_fix(concept: str) -> str:
         if w.lower() not in seen:
             unique_words.append(w)
             seen.add(w.lower())
-    fixed = ' '.join(unique_words)
+    fixed = " ".join(unique_words)
 
     # Handle specific cases
-    if 'World Data Data Augmentation' in concept:
-        fixed = 'Data Augmentation'
-    elif 'Data Augmentation' in concept and len(concept.split()) > 3:
-        fixed = 'Data Augmentation'
+    if "World Data Data Augmentation" in concept:
+        fixed = "Data Augmentation"
+    elif "Data Augmentation" in concept and len(concept.split()) > 3:
+        fixed = "Data Augmentation"
 
     return fixed
 
@@ -622,7 +754,7 @@ def find_corrupted_concepts(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     corrupted = []
 
     for f in facts:
-        concept = f.get('concept', '')
+        concept = f.get("concept", "")
         if not concept:
             continue
 
@@ -631,21 +763,23 @@ def find_corrupted_concepts(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         # Check for duplicate words
         words = concept.split()
         if len(words) != len(set(words)):
-            issues.append('duplicate_words')
+            issues.append("duplicate_words")
 
         # Check for invalid patterns
         concept_lower = concept.lower()
         for pattern in INVALID_CONCEPT_PATTERNS:
             if re.match(pattern, concept_lower):
-                issues.append('invalid_pattern')
+                issues.append("invalid_pattern")
                 break
 
         if issues:
-            corrupted.append({
-                'concept': concept,
-                'issues': issues,
-                'suggestion': _suggest_fix(concept)
-            })
+            corrupted.append(
+                {
+                    "concept": concept,
+                    "issues": issues,
+                    "suggestion": _suggest_fix(concept),
+                }
+            )
 
     return corrupted
 
@@ -654,15 +788,16 @@ def find_corrupted_concepts(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]
 # TYPE STATISTICS
 # ============================================================================
 
+
 def get_type_stats(facts: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Get statistics about concept types in a fact list."""
-    types = Counter(f.get('concept_type', 'unknown') for f in facts)
-    topics = Counter(f.get('topic', 'unknown') for f in facts)
+    types = Counter(f.get("concept_type", "unknown") for f in facts)
+    topics = Counter(f.get("topic", "unknown") for f in facts)
 
     return {
-        'total_facts': len(facts),
-        'type_distribution': dict(types),
-        'topic_distribution': dict(topics),
-        'unique_types': len(types),
-        'most_common_type': types.most_common(1)[0][0] if types else None,
+        "total_facts": len(facts),
+        "type_distribution": dict(types),
+        "topic_distribution": dict(topics),
+        "unique_types": len(types),
+        "most_common_type": types.most_common(1)[0][0] if types else None,
     }

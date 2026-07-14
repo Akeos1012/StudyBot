@@ -21,9 +21,12 @@ import logging
 
 from typing import List, Dict, Any, Optional, Tuple
 
+from .question_explanation import build_consistent_explanation
 from .question_templates import QuestionTemplates
 from .distractor_selector import DistractorSelector
-from ..models.fact_schema import get_question_types_for_type, get_question_difficulty
+from .question_type_selector import QuestionTypeSelector
+from ..models.fact_schema import get_question_difficulty
+from .option_builder import build_options
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # MAIN CLASS
 # ============================================================================
+
 
 class QuestionBuilder:
     """
@@ -50,58 +54,17 @@ class QuestionBuilder:
         """Initialize the question builder with required dependencies."""
         self.templates = QuestionTemplates()
         self.distractor_selector = DistractorSelector()
-        
+        self.question_type_selector = QuestionTypeSelector()
 
         # Question type weights by concept type
-        self.type_weights = {
-            "algorithm": {
-                "definition": 0.25, "comparison": 0.25,
-                "application": 0.25, "scenario": 0.15,
-                "reverse_definition": 0.10
-            },
-            "model": {
-                "definition": 0.30, "comparison": 0.20,
-                "application": 0.25, "scenario": 0.15,
-                "reverse_definition": 0.10
-            },
-            "metric": {
-                "definition": 0.35, "comparison": 0.20,
-                "application": 0.20, "scenario": 0.10,
-                "reverse_definition": 0.15
-            },
-            "system": {
-                "definition": 0.25, "comparison": 0.20,
-                "application": 0.30, "scenario": 0.15,
-                "reverse_definition": 0.10
-            },
-            "process": {
-                "definition": 0.25, "comparison": 0.15,
-                "application": 0.30, "scenario": 0.20,
-                "reverse_definition": 0.10
-            },
-            "concept": {
-                "definition": 0.35, "comparison": 0.15,
-                "application": 0.20, "scenario": 0.20,
-                "reverse_definition": 0.10
-            },
-            "data_structure": {
-                "definition": 0.30, "comparison": 0.20,
-                "application": 0.25, "scenario": 0.15,
-                "reverse_definition": 0.10
-            },
-            "framework": {
-                "definition": 0.30, "comparison": 0.25,
-                "application": 0.25, "scenario": 0.10,
-                "reverse_definition": 0.10
-            },
-        }
 
     # =========================================================================
     # PUBLIC API
     # =========================================================================
 
-    def build_question(self, fact: Dict[str, Any],
-                       distractors: List[str]) -> Optional[Dict[str, Any]]:
+    def build_question(
+        self, fact: Dict[str, Any], distractors: List[str]
+    ) -> Optional[Dict[str, Any]]:
         """
         Build a complete question from a fact and distractors.
 
@@ -142,7 +105,7 @@ class QuestionBuilder:
             return None
 
         # Select question type
-        question_type = self._select_question_type(concept_type, distractors)
+        question_type = self.question_type_selector.select(concept_type, distractors)
 
         # Build question text
         question_text = self._build_question_text(
@@ -150,22 +113,20 @@ class QuestionBuilder:
             concept=concept,
             definition=definition,
             topic=topic,
-            distractors=distractors
+            distractors=distractors,
         )
 
         # Build options
-        options, correct_letter = self._build_options(concept, distractors)
+        options, correct_letter = build_options(concept, distractors)
 
         # Calculate difficulty
         difficulty = get_question_difficulty(concept_type, question_type)
 
         # Generate explanation
-        explanation = self._build_explanation(
-            question_text=question_text,
-            options=options,
-            correct_letter=correct_letter,
+        explanation = build_consistent_explanation(
+            question=question_text,
             correct_text=concept,
-            supporting_fact=supporting_fact
+            supporting_fact=supporting_fact,
         )
 
         return {
@@ -180,11 +141,12 @@ class QuestionBuilder:
             "concept": concept,
             "concept_type": concept_type,
             "topic": topic,
-            "supporting_fact": supporting_fact
+            "supporting_fact": supporting_fact,
         }
 
-    def build_quiz(self, facts: List[Dict[str, Any]],
-                   count: int = 3) -> List[Dict[str, Any]]:
+    def build_quiz(
+        self, facts: List[Dict[str, Any]], count: int = 3
+    ) -> List[Dict[str, Any]]:
         """
         Build a quiz from a list of facts.
 
@@ -238,58 +200,20 @@ class QuestionBuilder:
     def _get_supporting_fact(self, fact: Dict[str, Any]) -> str:
         """Get supporting fact from fact dictionary."""
         return (
-            fact.get("supporting_fact") or
-            fact.get("sentence") or
-            fact.get("definition") or
-            ""
+            fact.get("supporting_fact")
+            or fact.get("sentence")
+            or fact.get("definition")
+            or ""
         )
 
-    def _select_question_type(self, concept_type: str,
-                              distractors: List[str]) -> str:
-        """
-        Select an appropriate question type for the concept.
-
-        Args:
-            concept_type: The concept type
-            distractors: Available distractors
-
-        Returns:
-            Selected question type
-        """
-        # Get recommended types for this concept type
-        recommended_types = get_question_types_for_type(concept_type)
-
-        # Get weights for this type
-        weights = self.type_weights.get(
-            concept_type,
-            self.type_weights.get("concept", {})
-        )
-
-        # Filter to recommended types
-        available_types = [t for t in weights.keys() if t in recommended_types]
-
-        if not available_types:
-            available_types = ["definition"]
-
-        # Avoid comparison if not enough distractors
-        if len(distractors) < 2 and "comparison" in available_types:
-            available_types.remove("comparison")
-
-        if not available_types:
-            available_types = ["definition"]
-
-        # Normalize weights
-        total_weight = sum(weights.get(t, 1.0) for t in available_types)
-        question_weights = [
-            weights.get(t, 1.0) / total_weight for t in available_types
-        ]
-
-        # Select question type
-        return random.choices(available_types, weights=question_weights)[0]
-
-    def _build_question_text(self, question_type: str, concept: str,
-                              definition: str, topic: str,
-                              distractors: List[str]) -> str:
+    def _build_question_text(
+        self,
+        question_type: str,
+        concept: str,
+        definition: str,
+        topic: str,
+        distractors: List[str],
+    ) -> str:
         """
         Build the question text based on type.
 
@@ -300,53 +224,8 @@ class QuestionBuilder:
             concept=concept,
             definition=definition,
             topic=topic,
-            distractors=distractors
+            distractors=distractors,
         )
-
-    def _build_options(self, concept: str,
-                       distractors: List[str]) -> Tuple[List[str], str]:
-        """
-        Build and shuffle options.
-
-        Args:
-            concept: The correct concept
-            distractors: List of distractor concepts
-
-        Returns:
-            Tuple of (formatted_options, correct_letter)
-        """
-        # Limit to 3 distractors
-        distractors = distractors[:3]
-
-        # Build options list
-        options = [concept] + distractors
-
-        # Shuffle
-        random.shuffle(options)
-
-        # Format options
-        formatted_options = [
-            f"{chr(65 + i)}) {opt}" for i, opt in enumerate(options)
-        ]
-
-        # Find correct letter
-        correct_letter = chr(65 + options.index(concept))
-
-        return formatted_options, correct_letter
-
-    def _build_explanation(self, question_text: str, options: List[str],
-                           correct_letter: str, correct_text: str,
-                           supporting_fact: str) -> str:
-        """
-        Build explanation using supporting fact.
-
-        This is a simplified version of the explanation builder.
-        For full explanation building, use GroundingProcessor.
-        """
-        if not supporting_fact:
-            return f"{correct_text} is the correct answer."
-
-        return f"{correct_text} is correct because {supporting_fact}"
 
     def _prepare_facts(self, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -389,8 +268,9 @@ class QuestionBuilder:
             for type_name, count in type_counts.items():
                 logger.info(f"  {type_name}: {count} facts")
 
-    def _select_candidate_facts(self, facts: List[Dict[str, Any]],
-                                count: int) -> List[Dict[str, Any]]:
+    def _select_candidate_facts(
+        self, facts: List[Dict[str, Any]], count: int
+    ) -> List[Dict[str, Any]]:
         """
         Select the best facts for quiz generation.
 
@@ -400,7 +280,9 @@ class QuestionBuilder:
 
         for f in facts:
             compatible = self.distractor_selector.get_compatible_facts(facts, f)
-            score = len(compatible)  # More compatible = better chance for good distractors
+            score = len(
+                compatible
+            )  # More compatible = better chance for good distractors
             scored_facts.append((f, score))
 
         # Sort by score (highest first)
@@ -411,8 +293,9 @@ class QuestionBuilder:
 
         return selected
 
-    def _generate_questions(self, selected_facts: List[Dict[str, Any]],
-                            all_facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _generate_questions(
+        self, selected_facts: List[Dict[str, Any]], all_facts: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Generate questions for selected facts.
 
@@ -458,8 +341,10 @@ class QuestionBuilder:
 # CONVENIENCE FUNCTIONS
 # ============================================================================
 
-def build_question(fact: Dict[str, Any],
-                   distractors: List[str]) -> Optional[Dict[str, Any]]:
+
+def build_question(
+    fact: Dict[str, Any], distractors: List[str]
+) -> Optional[Dict[str, Any]]:
     """
     Convenience function for building a single question.
 
@@ -474,8 +359,7 @@ def build_question(fact: Dict[str, Any],
     return builder.build_question(fact, distractors)
 
 
-def build_quiz(facts: List[Dict[str, Any]],
-               count: int = 3) -> List[Dict[str, Any]]:
+def build_quiz(facts: List[Dict[str, Any]], count: int = 3) -> List[Dict[str, Any]]:
     """
     Convenience function for building a quiz.
 

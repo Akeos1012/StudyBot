@@ -48,34 +48,36 @@ FIELD_NAME_MAPPING = {
 INTERNAL_FIELDS = {"question", "options", "correct", "explanation"}
 
 # Markdown code fences to remove
-CODE_FENCE_PATTERN = re.compile(
-    r'^```(?:json)?\s*|\s*```$',
-    flags=re.MULTILINE
-)
+CODE_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*|\s*```$", flags=re.MULTILINE)
 
 
 # ============================================================================
 # EXCEPTIONS
 # ============================================================================
 
+
 class LLMParserError(Exception):
     """Base exception for parser errors."""
+
     pass
 
 
 class JSONExtractionError(LLMParserError):
     """Raised when JSON cannot be extracted from the response."""
+
     pass
 
 
 class JSONParsingError(LLMParserError):
     """Raised when JSON cannot be parsed or repaired."""
+
     pass
 
 
 # ============================================================================
 # MAIN PARSER CLASS
 # ============================================================================
+
 
 class LLMParser:
     """
@@ -157,7 +159,9 @@ class LLMParser:
                 raise JSONParsingError(f"Unexpected parse error: {e}")
             return None
 
-    def extract_questions(self, result: Union[Dict[str, Any], List[Dict[str, Any]], None]) -> List[Dict[str, Any]]:
+    def extract_questions(
+        self, result: Union[Dict[str, Any], List[Dict[str, Any]], None]
+    ) -> List[Dict[str, Any]]:
         """
         Extract and normalize questions from a parsed result.
 
@@ -204,8 +208,8 @@ class LLMParser:
         """
         # Find JSON objects or arrays
         patterns = [
-            r'\{[\s\S]*\}',      # JSON object
-            r'\[[\s\S]*\]',      # JSON array
+            r"\{[\s\S]*\}",  # JSON object
+            r"\[[\s\S]*\]",  # JSON array
         ]
 
         for pattern in patterns:
@@ -225,9 +229,9 @@ class LLMParser:
         Returns:
             Cleaned JSON string
         """
-        return CODE_FENCE_PATTERN.sub('', json_str).strip()
+        return CODE_FENCE_PATTERN.sub("", json_str).strip()
 
-    def _parse_json(self, json_str: str) -> Optional[Dict[str, Any]]:
+    def _parse_json(self, json_str: str) -> Optional[Union[Dict[str, Any], List[Any]]]:
         """
         Parse a JSON string, with repair fallback.
 
@@ -275,8 +279,8 @@ class LLMParser:
         cleaned = cleaned.replace("'", '"')
 
         # Remove trailing commas in objects and arrays
-        cleaned = re.sub(r',\s*}', '}', cleaned)
-        cleaned = re.sub(r',\s*]', ']', cleaned)
+        cleaned = re.sub(r",\s*}", "}", cleaned)
+        cleaned = re.sub(r",\s*]", "]", cleaned)
 
         # Remove trailing commas after values in objects
         cleaned = re.sub(r'"\s*,\s*}', '"}', cleaned)
@@ -348,7 +352,9 @@ class LLMParser:
         for key, value in question.items():
             normalized_key = self._normalize_field_name(key)
             if normalized_key in INTERNAL_FIELDS:
-                normalized[normalized_key] = self._normalize_field_value(normalized_key, value)
+                normalized[normalized_key] = self._normalize_field_value(
+                    normalized_key, value
+                )
 
         # Check minimum required fields
         if not all(field in normalized for field in ["question", "options", "correct"]):
@@ -389,7 +395,7 @@ class LLMParser:
             # Normalize to uppercase letter
             if isinstance(value, str):
                 # Handle "A)", "A.", "A -" patterns
-                match = re.match(r'^([A-D])\s*[\)\.\-\s]', value.strip())
+                match = re.match(r"^([A-D])\s*[\)\.\-\s]", value.strip())
                 if match:
                     return match.group(1)
                 # Handle single letter
@@ -411,6 +417,7 @@ class LLMParser:
 # ============================================================================
 # CONVENIENCE FUNCTIONS
 # ============================================================================
+
 
 def parse_llm_response(raw_text: str) -> List[Dict[str, Any]]:
     """

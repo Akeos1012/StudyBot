@@ -11,18 +11,26 @@ This service coordinates the quiz generation pipeline:
 
 This module is NOT responsible for:
 - HTTP handling (main.py)
-- Fact extraction (fact_extractor.py)
-- Question generation (quiz_generator.py)
+- Question validation rules
+- LLM communication
+- Prompt construction
 """
 
+import time
 import random
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from difflib import SequenceMatcher
 
 from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
-from ..quiz.quiz_generator import QuizGenerator, is_relevant_to_topic
+from ..quiz.quiz_generator import QuizGenerator
+
+from ..config.quiz_config import (
+    MIN_POOL_SIZE,
+    MAX_FACTS_PER_NOTE,
+    MAX_NOTES_FOR_CONTEXT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,222 +39,252 @@ class QuizService:
     """
     Service for generating and managing quizzes.
 
+    The service coordinates existing components.
+    It does not create QuizGenerator instances repeatedly.
+
     Usage:
-        service = QuizService(metadata_loader)
-        questions = service.generate_questions("Cloud", count=3)
+        service = QuizService(
+            metadata_loader,
+            quiz_generator
+        )
+
+        questions = service.get_or_generate_questions(
+            "Cloud Computing",
+            count=3
+        )
     """
 
-    def __init__(self, metadata_loader: MetadataLoader,
-                 min_pool_size: int = 15,
-                 max_facts_per_note: int = 10,
-                 max_notes_for_context: int = 3):
-        """
-        Initialize the quiz service.
-
-        Args:
-            metadata_loader: MetadataLoader instance
-            min_pool_size: Minimum pool size before generating more
-            max_facts_per_note: Max facts to extract per note
-            max_notes_for_context: Max notes to use for context
-        """
+    def __init__(self, metadata_loader: MetadataLoader, quiz_generator: QuizGenerator):
         self.metadata_loader = metadata_loader
-        self.min_pool_size = min_pool_size
-        self.max_facts_per_note = max_facts_per_note
-        self.max_notes_for_context = max_notes_for_context
+        self.quiz_generator = quiz_generator
 
-    def generate_questions_for_topic(self, topic: str, subtopic: str = "",
-                                     difficulty: str = "medium",
-                                     count: int = 15) -> List[Dict[str, Any]]:
+    def generate_questions_for_topic(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        count: int = 15,
+    ) -> List[Dict[str, Any]]:
         """
-        Generate new questions for a topic to fill the pool.
-
-        Args:
-            topic: The topic name
-            subtopic: Optional subtopic
-            difficulty: Question difficulty
-            count: Number of questions to generate
-
-        Returns:
-            List of generated questions
+        Generate questions for a topic.
         """
-        logger.info(f"Generating {count} new questions for {topic}...")
 
-        # Get metadata
+        logger.info(f"Generating {count} questions for topic: {topic}")
+
         notes = self._get_notes_for_topic(topic, subtopic)
 
         if not notes:
             logger.error(f"No notes found for topic: {topic}")
             return []
 
-        # Rank notes
         ranked_notes = self._rank_notes_by_content(notes)
 
-        # Extract facts
         extracted_facts = self._extract_facts_from_notes(ranked_notes, topic)
 
-        # Generate questions from facts
         questions = self._generate_from_facts(extracted_facts, topic, count)
 
-        # If not enough, use fallback
         if len(questions) < count:
-            logger.info(f"Only got {len(questions)} questions from facts, using fallback...")
+            logger.info("Not enough fact-based questions. Using fallback.")
+
             fallback_questions = self._generate_fallback_questions(
                 ranked_notes, topic, count - len(questions)
             )
+
             questions.extend(fallback_questions)
 
-        logger.info(f"Generated {len(questions)} questions for {topic}")
         return questions[:count]
 
-    def get_or_generate_questions(self, topic: str, subtopic: str = "",
-                                  difficulty: str = "medium",
-                                  count: int = 3,
-                                  fresh: bool = False,
-                                  question_type: str = "multiple") -> List[Dict[str, Any]]:
+    def get_or_generate_questions(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        count: int = 3,
+        fresh: bool = False,
+        question_type: str = "multiple",
+    ) -> List[Dict[str, Any]]:
         """
-        Get questions from cache or generate new ones.
-
-        Args:
-            topic: The topic name
-            subtopic: Optional subtopic
-            difficulty: Question difficulty
-            count: Number of questions to return
-            fresh: If True, clear cache before generating
-            question_type: Type of questions ("multiple" or "fillblank")
-
-        Returns:
-            List of questions
+        Retrieve questions from cache or generate new ones.
         """
-        generator = QuizGenerator()
+        start_time = time.time()
 
-        # Clear cache if fresh
+        cache = self.quiz_generator.cache
+
         if fresh:
-            logger.info(f"Fresh requested - clearing pool for {topic}")
-            generator.cache.invalidate_topic_cache(topic, subtopic, difficulty, question_type)
+            logger.info(f"Clearing cache for {topic}")
 
-        # Get current pool
-        pool = generator.cache.get_pool(topic, subtopic, difficulty, question_type)
+            cache.invalidate_topic_cache(topic, subtopic, difficulty, question_type)
 
-        # Generate more if pool is small
-        if len(pool) < self.min_pool_size:
-            logger.info(f"Pool too small ({len(pool)} questions), generating more...")
-            new_questions = self.generate_questions_for_topic(topic, subtopic, difficulty)
+        pool = cache.get_pool(topic, subtopic, difficulty, question_type)
 
-            if new_questions:
-                # Filter out fallback questions for cache
-                real_questions = [q for q in new_questions if not q.get('_is_fallback', False)]
-                if real_questions:
-                    added = generator.cache.add_to_pool(
-                        topic, subtopic, difficulty, question_type, real_questions
-                    )
-                    logger.info(f"Added {added} real questions to pool")
-                pool = generator.cache.get_pool(topic, subtopic, difficulty, question_type)
+        if len(pool) < MIN_POOL_SIZE:
 
-        # Sample from pool
-        sampled = generator.cache.sample(topic, subtopic, difficulty, question_type, count)
-        return sampled or pool[:count]
+            logger.info(f"Pool size {len(pool)} is below minimum. Generating more.")
 
-    # =========================================================================
+            new_questions = self.generate_questions_for_topic(
+                topic, subtopic, difficulty
+            )
+
+            real_questions = [
+                q for q in new_questions if not q.get("_is_fallback", False)
+            ]
+
+            if real_questions:
+
+                added = cache.add_to_pool(
+                    topic, subtopic, difficulty, question_type, real_questions
+                )
+
+                logger.info(f"Added {added} questions to cache")
+
+            pool = cache.get_pool(topic, subtopic, difficulty, question_type)
+
+        sampled = cache.sample(topic, subtopic, difficulty, question_type, count)
+
+        result = sampled or pool[:count]
+
+        logger.info(f"Quiz generation completed in {time.time() - start_time:.2f}s")
+
+        return result
+
+    # ============================================================
     # PRIVATE HELPERS
-    # =========================================================================
+    # ============================================================
 
     def _get_notes_for_topic(self, topic: str, subtopic: str) -> List[Dict[str, Any]]:
-        """Get notes for a topic or subtopic."""
+
         if subtopic:
+
             notes = self.metadata_loader.get_notes_by_subtopic(topic, subtopic)
+
             if not notes:
-                logger.warning(f"No notes found for subtopic '{subtopic}', falling back to topic")
+                logger.warning(f"No notes found for {subtopic}. Falling back.")
+
                 notes = self.metadata_loader.get_notes_by_topic(topic)
+
         else:
+
             notes = self.metadata_loader.get_notes_by_topic(topic)
+
         return notes
 
-    def _rank_notes_by_content(self, notes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Rank notes by content length (highest first)."""
+    def _rank_notes_by_content(
+        self, notes: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+
         return sorted(notes, key=lambda x: x.get("content_length", 0), reverse=True)
 
-    def _extract_facts_from_notes(self, notes: List[Dict[str, Any]],
-                                  topic: str) -> List[Dict[str, Any]]:
-        """Extract facts from top notes."""
-        fact_extractor = FactExtractor()
-        extracted_facts = []
+    def _extract_facts_from_notes(
+        self, notes: List[Dict[str, Any]], topic: str
+    ) -> List[Dict[str, Any]]:
 
-        for meta in notes[:self.max_notes_for_context]:
+        extractor = FactExtractor()
+
+        extracted = []
+
+        for meta in notes[:MAX_NOTES_FOR_CONTEXT]:
+
             content = self.metadata_loader.get_truncated_content(meta["path"], 2000)
-            facts = fact_extractor.extract_facts(content, topic, source=meta["path"])
-            extracted_facts.extend(facts)
 
-        return extracted_facts
+            facts = extractor.extract_facts(content, topic, source=meta["path"])
 
-    def _generate_from_facts(self, facts: List[Dict[str, Any]],
-                             topic: str, target_count: int) -> List[Dict[str, Any]]:
-        """Generate questions from extracted facts."""
-        generator = QuizGenerator()
+            extracted.extend(facts)
+
+        return extracted
+
+    def _generate_from_facts(
+        self, facts: List[Dict[str, Any]], topic: str, target_count: int
+    ) -> List[Dict[str, Any]]:
+
         questions = []
 
-        for fact_data in facts[:self.max_facts_per_note]:
+        for fact_data in facts[:MAX_FACTS_PER_NOTE]:
+
             if len(questions) >= target_count:
                 break
 
             fact = fact_data.get("statement", "")
+
             answer = fact_data.get("answer", "")
 
             if not fact or not answer:
                 continue
 
-            question = generator.generate_with_retry(fact, answer, topic, fact_data=fact_data)
+            question = self.quiz_generator.generate_with_retry(
+                fact, answer, topic, fact_data=fact_data
+            )
+
             if question:
                 questions.append(question)
 
         return questions
 
-    def _generate_fallback_questions(self, notes: List[Dict[str, Any]],
-                                     topic: str, target_count: int) -> List[Dict[str, Any]]:
-        """Generate fallback questions when fact extraction fails."""
-        generator = QuizGenerator()
+    def _generate_fallback_questions(
+        self, notes: List[Dict[str, Any]], topic: str, target_count: int
+    ) -> List[Dict[str, Any]]:
+
         questions = []
 
         max_attempts = target_count * 3
+
         top_notes = notes[:6] if len(notes) >= 6 else notes
 
-        for attempt in range(max_attempts):
+        for _ in range(max_attempts):
+
             if len(questions) >= target_count:
                 break
 
-            num_notes = min(3, len(top_notes))
-            selected_meta = random.sample(top_notes, num_notes)
+            if not top_notes:
+                break
+
+            selected = random.sample(top_notes, min(3, len(top_notes)))
 
             context_parts = []
-            for meta in selected_meta:
+
+            for meta in selected:
+
                 content = self.metadata_loader.get_truncated_content(meta["path"], 2000)
+
                 context_parts.append(f"# {meta['title']}\n{content}")
 
             context = "\n\n---\n\n".join(context_parts)
 
-            result = generator.generate_questions(context=context, topic=topic, count=1)
+            result = self.quiz_generator.generate_questions(
+                context=context, topic=topic, count=1
+            )
+
             new_questions = result.get("questions", [])
 
             if new_questions:
-                q = new_questions[0]
-                if self._is_valid_question(q) and not self._is_duplicate(q, questions):
-                    questions.append(q)
+
+                question = new_questions[0]
+
+                if self._is_valid_question(question) and not self._is_duplicate(
+                    question, questions
+                ):
+                    questions.append(question)
 
         return questions
 
     def _is_valid_question(self, question: Dict[str, Any]) -> bool:
-        """Check if a question is valid."""
-        options_text = ' '.join(question.get('options', []))
-        if 'Option 1' in options_text or 'Option 2' in options_text:
-            return False
-        return True
 
-    def _is_duplicate(self, question: Dict[str, Any],
-                      existing: List[Dict[str, Any]]) -> bool:
-        """Check if a question is a duplicate."""
-        q_text = question.get('question', '')
-        for existing_q in existing:
-            existing_text = existing_q.get('question', '')
-            ratio = SequenceMatcher(None, q_text.lower(), existing_text.lower()).ratio()
-            if ratio > 0.6:
+        options = " ".join(question.get("options", []))
+
+        return "Option 1" not in options and "Option 2" not in options
+
+    def _is_duplicate(
+        self, question: Dict[str, Any], existing: List[Dict[str, Any]]
+    ) -> bool:
+
+        current = question.get("question", "").lower()
+
+        for item in existing:
+
+            previous = item.get("question", "").lower()
+
+            similarity = SequenceMatcher(None, current, previous).ratio()
+
+            if similarity > 0.6:
                 return True
+
         return False

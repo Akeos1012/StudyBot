@@ -32,7 +32,7 @@ from ..models.fact_schema import (
     normalize_fact,
     is_weak_concept,
     create_fact,
-    ConceptType
+    ConceptType,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,46 +62,68 @@ NOTE_EXTENSION = ".md"
 
 # Patterns to reject in fact text
 REJECTED_PATTERNS = [
-    r'^\s*#+\s*',  # Markdown headers
-    r'^\s*[-*+]\s*',  # Markdown bullets
-    r'^\s*\d+\.\s*',  # Numbered lists
-    r'\[\[(.*?)\]\]',  # Wiki links (preserve text)
-    r'^\s*(how|why|what|when|where)\s',  # Question words at start
-    r'\b(conclusion|summary|overview|references)\b',  # Section words
+    r"^\s*#+\s*",  # Markdown headers
+    r"^\s*[-*+]\s*",  # Markdown bullets
+    r"^\s*\d+\.\s*",  # Numbered lists
+    r"\[\[(.*?)\]\]",  # Wiki links (preserve text)
+    r"^\s*(how|why|what|when|where)\s",  # Question words at start
+    r"\b(conclusion|summary|overview|references)\b",  # Section words
 ]
 
 # Words that indicate weak concepts
 WEAK_INDICATORS = {
-    "example", "examples", "technique", "techniques",
-    "approach", "approaches", "method", "methods",
-    "process", "processes", "concept", "concepts",
-    "system", "systems", "layer", "layers",
-    "overview", "summary", "introduction", "conclusion",
-    "types", "categories", "classification"
+    "example",
+    "examples",
+    "technique",
+    "techniques",
+    "approach",
+    "approaches",
+    "method",
+    "methods",
+    "process",
+    "processes",
+    "concept",
+    "concepts",
+    "system",
+    "systems",
+    "layer",
+    "layers",
+    "overview",
+    "summary",
+    "introduction",
+    "conclusion",
+    "types",
+    "categories",
+    "classification",
 }
 
 # ============================================================================
 # EXCEPTIONS
 # ============================================================================
 
+
 class GroundingError(Exception):
     """Base exception for grounding errors."""
+
     pass
 
 
 class FactValidationError(GroundingError):
     """Raised when a fact fails validation."""
+
     pass
 
 
 class NoValidFactsError(GroundingError):
     """Raised when no valid facts are found."""
+
     pass
 
 
 # ============================================================================
 # MAIN CLASS
 # ============================================================================
+
 
 class GroundingProcessor:
     """
@@ -117,8 +139,11 @@ class GroundingProcessor:
             # Use grounded_facts for quiz generation
     """
 
-    def __init__(self, min_score: int = MIN_FACT_SCORE,
-                 max_length: int = MAX_SUPPORTING_FACT_LENGTH):
+    def __init__(
+        self,
+        min_score: int = MIN_FACT_SCORE,
+        max_length: int = MAX_SUPPORTING_FACT_LENGTH,
+    ):
         """
         Initialize the grounding processor.
 
@@ -210,7 +235,9 @@ class GroundingProcessor:
         # Step 4: Clean supporting evidence
         evidence = self._clean_evidence(normalized)
         if not evidence:
-            logger.debug(f"Fact has no supporting evidence: {normalized.get('concept')}")
+            logger.debug(
+                f"Fact has no supporting evidence: {normalized.get('concept')}"
+            )
             return None
 
         # Step 5: Build grounded fact with metadata
@@ -220,7 +247,7 @@ class GroundingProcessor:
             topic=normalized.get("topic", "Unknown"),
             source=normalized.get("source", "inline"),
             evidence=evidence,
-            concept_type=normalized.get("concept_type", "concept")
+            concept_type=normalized.get("concept_type", "concept"),
         )
 
         # Step 6: Score the fact
@@ -360,19 +387,19 @@ class GroundingProcessor:
             score += 1
 
         # Sentence clarity
-        if supporting and supporting.strip().endswith('.'):
+        if supporting and supporting.strip().endswith("."):
             score += 1
 
         # Penalize weak patterns
         concept_lower = concept.lower()
-        if concept_lower in ['concept', 'example', 'type', 'method']:
+        if concept_lower in ["concept", "example", "type", "method"]:
             score -= 5
-        if 'layer' in concept_lower:
+        if "layer" in concept_lower:
             score -= 3
 
         # Bonus for strong concept types
         concept_type = fact.get("concept_type", "concept")
-        if concept_type in ['algorithm', 'model', 'data_structure']:
+        if concept_type in ["algorithm", "model", "data_structure"]:
             score += 2
 
         return max(0, score)
@@ -393,11 +420,11 @@ class GroundingProcessor:
         """
         # Get evidence from various possible fields
         evidence = (
-            fact.get("supporting_fact") or
-            fact.get("sentence") or
-            fact.get("definition") or
-            fact.get("text") or
-            ""
+            fact.get("supporting_fact")
+            or fact.get("sentence")
+            or fact.get("definition")
+            or fact.get("text")
+            or ""
         )
 
         if not evidence:
@@ -412,7 +439,7 @@ class GroundingProcessor:
 
         # Check maximum word count
         if len(cleaned.split()) > MAX_SUPPORTING_FACT_WORDS:
-            cleaned = ' '.join(cleaned.split()[:MAX_SUPPORTING_FACT_WORDS]).rstrip(' .')
+            cleaned = " ".join(cleaned.split()[:MAX_SUPPORTING_FACT_WORDS]).rstrip(" .")
 
         return cleaned
 
@@ -433,16 +460,16 @@ class GroundingProcessor:
 
         # Remove markdown patterns
         for pattern in REJECTED_PATTERNS:
-            cleaned = re.sub(pattern, '', cleaned)
+            cleaned = re.sub(pattern, "", cleaned)
 
         # Remove markdown formatting
-        cleaned = re.sub(r'[*_`>#]', '', cleaned)
+        cleaned = re.sub(r"[*_`>#]", "", cleaned)
 
         # Normalize whitespace
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
         # Remove trailing punctuation
-        cleaned = cleaned.rstrip(' .')
+        cleaned = cleaned.rstrip(" .")
 
         return cleaned
 
@@ -450,10 +477,15 @@ class GroundingProcessor:
     # PRIVATE HELPERS - BUILDING
     # =========================================================================
 
-    def _build_grounded_fact(self, concept: str, definition: str,
-                             topic: str, source: str,
-                             evidence: str,
-                             concept_type: str = "concept") -> Dict[str, Any]:
+    def _build_grounded_fact(
+        self,
+        concept: str,
+        definition: str,
+        topic: str,
+        source: str,
+        evidence: str,
+        concept_type: str = "concept",
+    ) -> Dict[str, Any]:
         """
         Build a fully grounded fact with metadata.
 
@@ -480,7 +512,7 @@ class GroundingProcessor:
             definition=definition or evidence,
             topic=topic,
             source=source,
-            concept_type=concept_type
+            concept_type=concept_type,
         )
 
         # Add grounding metadata
@@ -508,8 +540,7 @@ class GroundingProcessor:
         source_path = Path(str(source))
         return source_path.stem  # Filename without extension
 
-    def _generate_fact_id(self, topic: str, source_note: str,
-                          concept: str) -> str:
+    def _generate_fact_id(self, topic: str, source_note: str, concept: str) -> str:
         """
         Generate a unique fact ID.
 
@@ -542,7 +573,7 @@ class GroundingProcessor:
             return "unknown"
 
         # Convert to lowercase, replace non-alphanumeric with underscore
-        slug = re.sub(r'[^a-z0-9]+', '_', str(text).lower()).strip('_')
+        slug = re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
         return slug or "unknown"
 
     # =========================================================================
@@ -587,8 +618,9 @@ class GroundingProcessor:
 
         return unique
 
-    def _is_semantically_similar(self, text1: str, text2: str,
-                                  threshold: float = 0.7) -> bool:
+    def _is_semantically_similar(
+        self, text1: str, text2: str, threshold: float = 0.7
+    ) -> bool:
         """
         Check if two texts are semantically similar.
 

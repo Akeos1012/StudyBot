@@ -14,7 +14,7 @@ from .question_validator import is_duplicate_question
 from ..rag.fact_cache import FactCache
 from .llm_parser import LLMParser
 from .llm_client import LLMClient
-
+from app.utils.performance_profiler import profile_time
 
 from .question_semantic import (
     validate_semantic,
@@ -364,7 +364,8 @@ class QuizGenerator:
                           supporting_facts: list = None) -> Dict[str, Any]:
         """Generate a single quiz question from context."""
         self._supporting_facts = supporting_facts or []
-        
+
+            
         prompt = f"""You are a computer science tutor creating a multiple-choice question.
 
 TOPIC: {topic}

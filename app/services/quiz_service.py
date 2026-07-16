@@ -22,9 +22,17 @@ import logging
 from typing import List, Dict, Any
 from difflib import SequenceMatcher
 
+
 from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
 from ..quiz.quiz_generator import QuizGenerator
+from ..monitoring.quiz_metrics import QuizMetrics
+from ..quiz.validation_logger import set_metrics
+
+from ..quiz.validation_logger import (
+    set_metrics,
+    get_metrics,
+)
 
 from ..config.quiz_config import (
     MIN_POOL_SIZE,
@@ -71,26 +79,96 @@ class QuizService:
 
         logger.info(f"Generating {count} questions for topic: {topic}")
 
+        metrics = QuizMetrics(topic=topic)
+        set_metrics(metrics)
+
+        metrics.questions_requested = count
+        overall_start = time.perf_counter()
+
+        stage = time.perf_counter()
         notes = self._get_notes_for_topic(topic, subtopic)
+        metrics.notes_loaded = len(notes)
+
+        logger.info(
+            "PROFILE | Note retrieval: %.3fs",
+            time.perf_counter() - stage,
+        )
 
         if not notes:
             logger.error(f"No notes found for topic: {topic}")
             return []
 
+        stage = time.perf_counter()
         ranked_notes = self._rank_notes_by_content(notes)
+        logger.info(
+            "PROFILE | Note ranking: %.3fs",
+            time.perf_counter() - stage,
+        )
 
+        stage = time.perf_counter()
         extracted_facts = self._extract_facts_from_notes(ranked_notes, topic)
+        metrics.facts_extracted = len(extracted_facts)
+        logger.info(
+            "PROFILE | Fact extraction: %.3fs",
+            time.perf_counter() - stage,
+        )
 
-        questions = self._generate_from_facts(extracted_facts, topic, count)
+        stage = time.perf_counter()
+        questions = self._generate_from_facts(
+            extracted_facts,
+            topic,
+            count,
+        )
+
+        logger.info(
+            "PROFILE | Question generation: %.3fs",
+            time.perf_counter() - stage,
+        )
 
         if len(questions) < count:
+            
+            metrics.fallback_used = True
             logger.info("Not enough fact-based questions. Using fallback.")
 
+            stage = time.perf_counter()
+
             fallback_questions = self._generate_fallback_questions(
-                ranked_notes, topic, count - len(questions)
+                ranked_notes,
+                topic,
+                count - len(questions),
+            )
+
+            logger.info(
+                "PROFILE | Fallback generation: %.3fs",
+                time.perf_counter() - stage,
             )
 
             questions.extend(fallback_questions)
+        metrics.questions_generated = len(questions)
+
+        logger.info(
+            "PROFILE | TOTAL generate_questions_for_topic: %.3fs",
+            time.perf_counter() - overall_start,
+        )
+
+        metrics.questions_accepted = min(
+            len(questions),
+            count,
+        )
+
+        metrics.questions_rejected = max(
+            0,
+            metrics.questions_generated - metrics.questions_accepted,
+        )
+
+
+        logger.info(
+            "QUIZ METRICS: %s",
+            metrics.report()
+        )
+
+        print("\n========== QUIZ METRICS ==========")
+        print(metrics.report())
 
         return questions[:count]
 
@@ -107,6 +185,13 @@ class QuizService:
         Retrieve questions from cache or generate new ones.
         """
         start_time = time.time()
+        print("\n========== QUIZ SERVICE ==========")
+        print("Entered get_or_generate_questions()")
+        print("Topic:", topic)
+        print("Fresh:", fresh)
+        print("Count:", count)
+        print("==================================")
+
 
         cache = self.quiz_generator.cache
 
@@ -116,8 +201,11 @@ class QuizService:
             cache.invalidate_topic_cache(topic, subtopic, difficulty, question_type)
 
         pool = cache.get_pool(topic, subtopic, difficulty, question_type)
+        print("Pool size:", len(pool))
 
         if len(pool) < MIN_POOL_SIZE:
+            
+            print("Generating new questions...")
 
             logger.info(f"Pool size {len(pool)} is below minimum. Generating more.")
 
@@ -216,6 +304,11 @@ class QuizService:
 
             if question:
                 questions.append(question)
+
+                metrics = get_metrics()
+
+                if metrics:
+                    metrics.facts_used += 1
 
         return questions
 

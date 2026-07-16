@@ -87,8 +87,6 @@ INVALID_CONCEPT_WORDS = {
 
 # ============ UTILITY FUNCTIONS ============
 
-
-
 def filter_similar_questions(
     questions: List[Dict[str, Any]],
     threshold: float = 0.6
@@ -405,14 +403,14 @@ Example:
 Generate 5 questions now:"""
 
         try:
-            content = self.llm.generate(
-                prompt,
-                temperature=0.2,
-                top_p=0.8,
-                num_predict=2000,
-                stop=["```"]
-            )
-
+            with profile_time("LLM generation"):
+                content = self.llm.generate(
+                    prompt,
+                    temperature=0.3,
+                    top_p=0.8,
+                    num_predict=1200
+                )
+                
             print("RAW RESPONSE:")
             print(content)
 
@@ -430,44 +428,53 @@ Generate 5 questions now:"""
             try:
                 result = json.loads(content)
                 print("✅ JSON parsed successfully")
+
             except json.JSONDecodeError:
                 try:
                     repaired = repair_json(content)
                     result = json.loads(repaired)
+
                 except Exception as e:
                     print(f"⚠️ JSON repair failed: {e}")
                     return {"questions": []}
-            
-                # Normalize every valid JSON format into:
-                # {"questions": [...]}
 
-                if isinstance(result, list):
-                    result = {"questions": result}
 
-                elif isinstance(result, dict):
+            # Normalize every valid JSON format into:
+            # {"questions": [...]}
 
-                    if "questions" in result:
-                        pass
+            if isinstance(result, list):
 
-                    elif "question" in result:
+                result = {"questions": result}
 
-                        if "options" not in result:
-                            print("⚠️ LLM forgot options, rejecting question")
-                            return {"questions": []}
+            elif isinstance(result, dict):
 
-                        result = {"questions": [result]}
+                if "questions" in result:
+                    pass
 
-                    else:
-                        print("⚠️ Unknown JSON format")
+                elif "question" in result:
+
+                    if "options" not in result:
+                        print("⚠️ LLM forgot options, rejecting question")
                         return {"questions": []}
 
+                    result = {"questions": [result]}
+
                 else:
-                    print("⚠️ Invalid JSON root")
+                    print("⚠️ Unknown JSON format")
                     return {"questions": []}
+
+            else:
+                print("⚠️ Invalid JSON root")
+                return {"questions": []}
             
             valid_questions = []
 
-            for q in result['questions']:
+            facts = self.retriever.retrieve(
+                topic=topic,
+                limit=20
+            )
+
+            for q in result["questions"]:
 
                 if 'options' in q and len(q['options']) == 4:
 
@@ -520,10 +527,11 @@ Generate 5 questions now:"""
                             print("⚠️ Skipping malformed question")
                             continue
 
-                    # Get answer text first
-                    correct_letter = q.get('correct', '')
+                    # Get the answer text first
+                    correct_letter = q.get("correct", "")
+
                     correct_text = get_correct_text_from_options(
-                        q.get('options', []),
+                        q.get("options", []),
                         correct_letter
                     )
 
@@ -533,9 +541,9 @@ Generate 5 questions now:"""
                         fallback_context=context
                     )
 
-                    # Stage 2: Content - Grounding
                     if not validate_grounding(
                         q,
+                        context,
                         supporting_fact
                     ):
                         log_validation_failure(
@@ -581,6 +589,7 @@ Generate 5 questions now:"""
                     
                     # Normalize correct field
                     if not normalize_and_validate_correct_field(q):
+
                         log_validation_failure(
                             q,
                             "correct_field",
@@ -615,11 +624,10 @@ Generate 5 questions now:"""
                     q['source_note'] = "llm_generated"
                     
                     # Quality scoring
-                    facts = self.retriever.retrieve(
-                        topic=topic,
-                        limit=20
+                    is_acceptable, score, scores = self._check_quality(
+                        q,
+                        facts
                     )
-                    is_acceptable, score, scores = self._check_quality(q, facts)
                     
                     if not is_acceptable:
                         print(f"⚠️ Question scored {score:.2f} - below threshold, skipping")
@@ -680,11 +688,10 @@ Generate 5 questions now:"""
                 
                 fallback = generate_fallback_question(context, topic, extracted_concepts, supporting_facts)
                 if fallback:
-                    facts = self.retriever.retrieve(
-                        topic=topic,
-                        limit=20
+                    is_acceptable, score, scores = self._check_quality(
+                        fallback,
+                        facts
                     )
-                    is_acceptable, score, scores = self._check_quality(fallback, facts)
                     if is_acceptable:
                         fallback['_quality_score'] = score
                         fallback['_quality_scores'] = scores

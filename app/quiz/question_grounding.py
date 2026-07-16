@@ -84,7 +84,10 @@ def validate_grounding(
 
         if len(meaningful_correct_words) >= 2:
             for sentence in sentences:
-                sentence_words = set(sentence.split())
+                sentence_words = {
+                    w.lower()
+                    for w in re.findall(r"\w+", sentence)
+                }
 
                 matched_words = [
                     w for w in meaningful_correct_words if w in sentence_words
@@ -92,24 +95,7 @@ def validate_grounding(
 
                 overlap = len(matched_words) / len(meaningful_correct_words)
 
-                if overlap >= 0.75:
-                    return True
-            meaningful_correct_words = [
-                w for w in correct_words if w not in STOP_WORDS and len(w) > 3
-            ]
-
-        if len(meaningful_correct_words) >= 2:
-            for sentence in sentences:
-                sentence_words = set(sentence.split())
-
-                matched_words = [
-                    w for w in meaningful_correct_words if w in sentence_words
-                ]
-
-                overlap = len(matched_words) / len(meaningful_correct_words)
-
-                if overlap >= 0.75:
-                    logger.debug(f"Grounding phrase match: {correct_text}")
+                if overlap >= 0.60:
                     return True
 
     log_validation_failure(
@@ -134,9 +120,23 @@ def attach_grounding_fields(
 
     question["correct_text"] = correct_text or ""
     question["supporting_fact"] = normalize_supporting_fact(supporting_fact or "")
+    logger.debug(
+        "Attached supporting fact: %s",
+        question["supporting_fact"][:120]
+    )
 
     if not question["supporting_fact"]:
-        return False
+        logger.debug(
+            "Supporting fact missing. Falling back to context."
+        )
+
+        question["supporting_fact"] = normalize_supporting_fact(context)
+
+        if not question["supporting_fact"]:
+            logger.debug(
+                "Context fallback also failed."
+            )
+            return False
 
     # Try to build a proper explanation
     if correct_text and question["supporting_fact"]:
@@ -204,30 +204,56 @@ def select_supporting_fact(
     if not candidates:
         return ""
 
-    correct_words = [w.lower() for w in re.findall(r"\w+", correct_text) if len(w) > 2]
+    correct_words = {
+        w.lower()
+        for w in re.findall(r"\w+", correct_text)
+        if len(w) > 3 and w.lower() not in STOP_WORDS
+    }
+    if not correct_words:
+        return ""
 
     best_candidate = ""
-    best_score = 0
+    best_score = 0.0
 
     for candidate in candidates:
 
         candidate_lower = candidate.lower()
 
-        score = 0
+        candidate_words = {
+            w.lower()
+            for w in re.findall(r"\w+", candidate_lower)
+            if len(w) > 3 and w.lower() not in STOP_WORDS
+        }
 
-        for word in correct_words:
-            if word in candidate_lower:
-                score += 1
+        if not candidate_words:
+            continue
+
+        overlap = len(correct_words & candidate_words)
+
+        score = overlap / max(len(correct_words), 1)
 
         if correct_text.lower() in candidate_lower:
-            score += 5
+            score += 0.5
 
         if score > best_score:
             best_score = score
             best_candidate = candidate
 
-    if best_score == 0:
-        return ""
+    # Don't reject everything.
+    # Fall back to the highest scoring sentence.
+
+    if best_candidate:
+        logger.debug(
+            "Selected supporting fact | score=%.2f | answer='%s' | fact='%s'",
+            best_score,
+            correct_text,
+            best_candidate[:120],
+        )
+    else:
+        logger.debug(
+            "No supporting fact found for answer='%s'",
+            correct_text,
+        )
 
     return best_candidate
 

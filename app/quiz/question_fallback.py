@@ -67,7 +67,13 @@ INVALID_CONCEPT_WORDS = {
 }
 
 
-def create_fact_based_question(concept: str, supporting_fact: str, topic: str) -> dict:
+def create_fact_based_question(
+    concept: str,
+    supporting_fact: str,
+    topic: str,
+    source_note: str = "",
+    fact_id: str = "",
+) -> dict:
     """
     Create a fallback question directly from extracted facts.
     """
@@ -103,8 +109,14 @@ def create_fact_based_question(concept: str, supporting_fact: str, topic: str) -
         "correct_text": concept,
         "supporting_fact": supporting_fact,
         "explanation": (f"{supporting_fact}"),
-        "source_note": "fact_based_fallback",
-        "fact_id": (f"fact_fallback_{concept.lower().replace(' ', '_')}"),
+        "source_note": (
+            source_note or "fact_based_fallback"
+        ),
+
+        "fact_id": (
+            fact_id
+            or f"fact_fallback_{concept.lower().replace(' ', '_')}"
+        ),
         "_is_fallback": True,
         "_quality_score": 0.7,
         "_quality_scores": {
@@ -157,7 +169,13 @@ def generate_fallback_question(
 
                 if concept and is_valid_concept(concept) and supporting_fact:
 
-                    return create_fact_based_question(concept, supporting_fact, topic)
+                    return create_fact_based_question(
+                        concept=concept,
+                        supporting_fact=supporting_fact,
+                        topic=topic,
+                        source_note=sf.get("source_note", ""),
+                        fact_id=sf.get("fact_id", ""),
+                    )
 
     # 3. Extract capitalized concepts from context
 

@@ -124,9 +124,12 @@ class QuestionBuilder:
 
         # Generate explanation
         explanation = build_consistent_explanation(
-            question=question_text,
+            question_text=question_text,
+            options=options,
+            correct_letter=correct_letter,
             correct_text=concept,
-            supporting_fact=supporting_fact,
+            context=supporting_fact,
+            facts=[fact],
         )
 
         return {

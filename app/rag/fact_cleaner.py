@@ -12,7 +12,13 @@ Handles:
 """
 
 import re
+from typing import Dict, Any, List, Optional
 
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+
+# Common encoding corruption fixes
 ENCODING_FIXES = {
     "â€“": "-",
     "â€”": "-",
@@ -22,28 +28,48 @@ ENCODING_FIXES = {
     "â€¦": "...",
 }
 
+# Patterns to remove from text
+MARKDOWN_PATTERNS = [
+    r"[*_#`]",  # Markdown formatting
+    r"^-\s*",  # Markdown list bullets (start of line)
+    r"^\\-\s*",  # Escaped list bullets
+]
+
+# Patterns to normalize
+WHITESPACE_PATTERN = r"\s+"
+CAMEL_CASE_PATTERN = r"([a-z])([A-Z])"
+
+# ============================================================================
+# PUBLIC FUNCTIONS
+# ============================================================================
+
 
 def clean_text(text: str) -> str:
     """
     Clean general text formatting.
-    """
 
+    Args:
+        text: Raw text string
+
+    Returns:
+        Cleaned text string
+    """
     if not text:
         return ""
 
+    # Fix encoding corruption
     for bad, good in ENCODING_FIXES.items():
         text = text.replace(bad, good)
 
     # Remove markdown formatting
-    text = re.sub(r"[*_#`]", "", text)
+    for pattern in MARKDOWN_PATTERNS:
+        text = re.sub(pattern, "", text)
 
-    # Remove markdown list bullets
-    text = re.sub(r"^\\-\s*", "", text)
-    text = re.sub(r"^-\s*", "", text)
+    # Normalize whitespace
+    text = re.sub(WHITESPACE_PATTERN, " ", text)
 
-    # Normalize spaces
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+    # Add spaces between camelCase words (e.g., "cloudStorage" -> "cloud Storage")
+    text = re.sub(CAMEL_CASE_PATTERN, r"\1 \2", text)
 
     return text.strip()
 
@@ -51,11 +77,19 @@ def clean_text(text: str) -> str:
 def clean_concept(concept: str) -> str:
     """
     Clean concept names.
+
+    Args:
+        concept: Raw concept string
+
+    Returns:
+        Cleaned concept string
     """
+    if not concept:
+        return ""
 
     concept = clean_text(concept)
 
-    # Remove trailing separators
+    # Remove trailing separators (colon, dash, em dash, en dash)
     concept = re.sub(r"[-:–—]+$", "", concept)
 
     return concept.strip()
@@ -64,44 +98,104 @@ def clean_concept(concept: str) -> str:
 def clean_definition(concept: str, definition: str) -> str:
     """
     Clean fact definition.
-    """
 
-    definition = clean_text(definition)
+    Removes duplicated concept names inside definitions.
+    """
 
     if not definition:
         return ""
 
-    # Remove duplicated concept prefix
-    pattern = rf"^{re.escape(concept)}\s*[-:]\s*"
+    definition = clean_text(definition)
 
-    definition = re.sub(pattern, "", definition, flags=re.IGNORECASE)
+    if not concept:
+        return definition
+
+    # Remove concept prefix
+    pattern = rf"^{re.escape(concept)}\s*[-:–—]?\s*"
+    definition = re.sub(
+        pattern,
+        "",
+        definition,
+        flags=re.IGNORECASE
+    )
+
+    # Remove repeated concept at sentence start
+    duplicate_pattern = (
+        rf"\b{re.escape(concept)}\b\s+"
+        rf"\b{re.escape(concept)}\b"
+    )
+
+    definition = re.sub(
+        duplicate_pattern,
+        concept,
+        definition,
+        flags=re.IGNORECASE
+    )
 
     return definition.strip()
 
 
-def clean_fact(fact: dict) -> dict:
+def clean_fact(fact: Dict[str, Any]) -> Dict[str, Any]:
     """
     Clean a complete fact dictionary.
+
+    Args:
+        fact: Raw fact dictionary with 'concept', 'definition', and optional 'sentence'
+
+    Returns:
+        Cleaned fact dictionary
     """
+    if not fact:
+        return {}
 
     cleaned = fact.copy()
 
+    # Clean concept
     concept = clean_concept(cleaned.get("concept", ""))
 
+    # Clean definition using the cleaned concept
     definition = clean_definition(concept, cleaned.get("definition", ""))
 
     cleaned["concept"] = concept
     cleaned["definition"] = definition
 
+    # Clean optional fields
     if "sentence" in cleaned:
         cleaned["sentence"] = clean_text(cleaned["sentence"])
+
+    if "supporting_fact" in cleaned:
+        cleaned["supporting_fact"] = clean_text(cleaned["supporting_fact"])
 
     return cleaned
 
 
-def clean_facts(facts: list) -> list:
+def clean_facts(facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Clean multiple facts.
+
+    Args:
+        facts: List of raw fact dictionaries
+
+    Returns:
+        List of cleaned fact dictionaries
     """
+    if not facts:
+        return []
 
     return [clean_fact(fact) for fact in facts if fact]
+
+
+# ============================================================================
+# MODULE TEST
+# ============================================================================
+
+if __name__ == "__main__":
+    # Test the cleaner
+    test_fact = {
+        "concept": "Cloud Storage:",
+        "definition": "Cloud Storage: Cloud Storage allows users to store files remotely.",
+        "sentence": "Cloud Storage is a service.",
+    }
+
+    print("Original:", test_fact)
+    print("Cleaned:", clean_fact(test_fact))

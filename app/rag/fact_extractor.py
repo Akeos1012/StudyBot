@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, Set
 from dataclasses import dataclass, field
 from enum import Enum
+from .fact_cleaner import clean_fact
 import logging
 
 from ..models.fact_schema import (
@@ -979,7 +980,7 @@ class FactExtractor:
             fact["answer"] = concept
             fact["weight"] = weight
 
-            return fact, None
+            return clean_fact(fact), None
 
         except ValueError as e:
             return None, RejectionInfo(RejectionReason.CREATION_ERROR, str(e), text)

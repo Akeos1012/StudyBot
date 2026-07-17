@@ -148,8 +148,18 @@ def validate_structure(question: dict) -> bool:
 
     q_text = question["question"].strip()
 
+    # Auto-fix missing question mark from the LLM
+    if q_text and not q_text.endswith("?"):
+        q_text = q_text.rstrip(".!,:;") + "?"
+        question["question"] = q_text
+
+    # Validate after auto-fix
     if not q_text.endswith("?"):
-        log_validation_failure(question, "structure", "Question does not end with '?'")
+        log_validation_failure(
+            question,
+            "structure",
+            "Question does not end with '?'"
+        )
         return False
 
     if len(q_text) > MAX_QUESTION_LENGTH:
@@ -250,45 +260,56 @@ def validate_question_focus(
     q_normalized = _normalize_text(q_text)
     concept_normalized = _normalize_text(concept)
 
-    # Rule 2: Exact phrase appears in question
+    # Rule 2:
+    # Exact concept appears in the question.
     if concept_normalized in q_normalized:
         return True
 
-    # NEW: Ignore spaces ("Cloud Database" == "clouddatabase")
     compact_question = q_normalized.replace(" ", "")
     compact_concept = concept_normalized.replace(" ", "")
 
     if compact_concept in compact_question:
         return True
 
-    # Rule 3: Require most meaningful words, not just 50%
+
+    # Rule 3:
+    # The question doesn't have to literally contain the concept.
+    # If it strongly reflects the supporting fact, it's acceptable.
+    if supporting_fact:
+
+        fact_words = set(_extract_meaningful_words(supporting_fact))
+        q_words = set(_extract_meaningful_words(q_text))
+
+        if fact_words:
+            overlap = len(fact_words & q_words) / len(fact_words)
+
+            if overlap >= 0.45:
+                return True
+
+
+    # Rule 4:
+    # Fall back to concept-word matching.
     concept_words = set(_extract_meaningful_words(concept))
     q_words = set(_extract_meaningful_words(q_text))
 
     if concept_words:
+
         overlap = len(concept_words & q_words) / len(concept_words)
 
-        if overlap >= 0.6:
+        if overlap >= 0.5:
             return True
 
-    if concept_words:
         matched = sum(1 for w in concept_words if w in q_words)
-        match_ratio = matched / len(concept_words)
 
-        # If at least 50% of concept words appear in question, accept
-        if match_ratio >= 0.5:
-            return True
+        if matched:
+            print(
+                f"⚠️ Partial concept match for '{concept}': "
+                f"{matched}/{len(concept_words)}"
+            )
 
-        # If we have some matches but not enough, log for debugging
-        if match_ratio > 0:
-            print(f"⚠️ Partial concept match for '{concept}': {match_ratio:.0%}")
 
-    # Rule 4: Check if key concept words appear in any meaningful form
-    # Example: "Cloud Storage" -> "storage" appears in "Which service allows users to store files?"
-    concept_words_lower = [w.lower() for w in concept.split()]
-    q_text_lower = q_text.lower()
-
-    # Rule 4: Stem-like matching
+    # Rule 5:
+    # Stem-like matching ("storage" vs "store")
     for concept_word in concept_words:
         for q_word in q_words:
             if (

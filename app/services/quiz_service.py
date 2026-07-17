@@ -186,6 +186,13 @@ class QuizService:
                 topic, subtopic, difficulty, count  # Pass count to generate_questions_for_topic
             )
 
+            generator_metrics = self.quiz_generator.get_metrics()
+
+            logger.info(
+                "QuizGenerator metrics: %s",
+                generator_metrics
+            )
+
             real_questions = [
                 q for q in new_questions if not q.get("_is_fallback", False)
             ]

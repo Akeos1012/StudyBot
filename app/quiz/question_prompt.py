@@ -94,12 +94,30 @@ STRICT RULES:
    - Reference information from the FACT
    - Do not introduce new information
 
-8. Avoid these question patterns unless directly supported by the FACT:
+8. Vary the question opening.
 
-   - "What is the definition of..."
-   - "Which layer..."
-   - "Which component allows..."
-   - "Which service provides..."
+Avoid using the same opening repeatedly.
+
+Good openings include:
+
+- "Which technology..."
+- "Which service..."
+- "Which concept..."
+- "Which feature..."
+- "Which option best describes..."
+- "Which statement best describes..."
+- "What allows..."
+- "What enables..."
+- "Which cloud service..."
+
+Do not begin every question with "Which technology".
+
+Avoid these patterns unless directly supported by the FACT:
+
+- "What is the definition of..."
+- "Which layer..."
+- "Which component allows..."
+- "Which service provides..."
 
 9. Avoid generic questions:
 

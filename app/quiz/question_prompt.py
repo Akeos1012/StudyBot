@@ -65,13 +65,47 @@ STRICT RULES:
 1. The question must test the TARGET CONCEPT:
    "{answer}"
 
-2. The question must NOT directly reveal the answer.
+2. Do not ask for a direct definition.
 
    Bad:
    "What is Cloud Storage?"
 
+   Bad:
+   "Define Cloud Storage."
+
    Good:
-   "Which technology stores files remotely using cloud-based systems?"
+   "Which cloud technology allows users to store files remotely over the internet?"
+
+   Good:
+   "Cloud Storage is primarily used for which purpose?"
+
+   Good:
+   "Which cloud service allows users to store digital files on remote servers?"
+
+   The question may naturally mention the target concept.
+   Avoid definition-style questions, not the concept name itself.
+
+2.5 Question Focus Rules
+
+   The question must clearly be about "{answer}".
+
+   The reader should know which concept is being discussed before reading the answer choices.
+
+   Whenever it sounds natural, include "{answer}" in the question itself.
+
+   Avoid writing overly generic questions that could describe many different concepts.
+
+   Good:
+   Which cloud storage technology stores files on remote servers?
+
+   Good:
+   Cloud Storage is primarily designed for which purpose?
+
+   Bad:
+   Which technology stores files remotely?
+
+   Bad:
+   Which service manages data?
 
 3. The question must be answerable ONLY using the FACT.
 
@@ -153,7 +187,9 @@ Before returning JSON, verify:
 - Can the answer be found in the FACT?
 - Does the explanation use the FACT?
 - Are distractors incorrect according to the FACT?
-- Does the question focus on "{answer}"?
+- Does the question clearly identify "{answer}" as the subject being tested?
+- Would a reader know which concept the question is about before looking at the answer choices?
+- Is the wording specific rather than generic?
 
 Generate exactly ONE question.
 """

@@ -19,7 +19,9 @@ This module is NOT responsible for:
 import time
 import logging
 from typing import List, Dict, Any
+from pprint import pprint
 
+from ..rag.grounding_processor import GroundingProcessor
 from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
 from ..quiz.quiz_generator import QuizGenerator
@@ -245,13 +247,36 @@ class QuizService:
     def _extract_facts_from_notes(
         self, notes: List[Dict[str, Any]], topic: str
     ) -> List[Dict[str, Any]]:
+
         extractor = FactExtractor()
+        grounder = GroundingProcessor()
+
         extracted = []
 
-        for meta in notes[:MAX_NOTES_FOR_CONTEXT]:
-            content = self.metadata_loader.get_truncated_content(meta["path"], 2000)
-            facts = extractor.extract_facts(content, topic, source=meta["path"])
-            extracted.extend(facts)
+        print("\n===== NOTES DEBUG =====")
+        print(type(notes))
+        print(type(notes[0]))
+        pprint(notes[0])
+        print("=======================\n")
+
+        for note in notes:
+            source = note["path"]
+
+            content = self.metadata_loader.get_note_content(source)
+
+            if not content:
+                logger.warning(f"Could not load note: {source}")
+                continue
+
+            facts = extractor.extract_facts(
+                content,
+                topic,
+                source=source,
+            )
+
+            grounded = grounder.ground_all(facts)
+
+            extracted.extend(grounded)
 
         return extracted
 
@@ -263,9 +288,22 @@ class QuizService:
         for fact_data in facts[:MAX_FACTS_PER_NOTE]:
             if len(questions) >= target_count:
                 break
+            
+            print("\n===== FACT DEBUG =====")
+            pprint(fact_data)
+            print("======================")
+            fact = (
+                fact_data.get("supporting_fact")
+                or fact_data.get("definition")
+                or fact_data.get("sentence")
+                or ""
+            )
 
-            fact = fact_data.get("statement", "")
-            answer = fact_data.get("answer", "")
+            answer = (
+                fact_data.get("answer")
+                or fact_data.get("concept")
+                or ""
+            )
 
             if not fact or not answer:
                 continue

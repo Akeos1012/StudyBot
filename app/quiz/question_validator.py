@@ -273,17 +273,24 @@ def validate_question_focus(
 
 
     # Rule 3:
-    # The question doesn't have to literally contain the concept.
-    # If it strongly reflects the supporting fact, it's acceptable.
+    # Accept questions that strongly match the supporting fact,
+    # even if the concept name itself is not mentioned.
+
     if supporting_fact:
 
         fact_words = set(_extract_meaningful_words(supporting_fact))
         q_words = set(_extract_meaningful_words(q_text))
 
         if fact_words:
+
             overlap = len(fact_words & q_words) / len(fact_words)
 
-            if overlap >= 0.45:
+            # Strong semantic overlap
+            if overlap >= 0.35:
+                return True
+
+            # Absolute overlap for long facts
+            if len(fact_words & q_words) >= 5:
                 return True
 
 

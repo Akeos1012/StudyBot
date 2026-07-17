@@ -13,6 +13,7 @@ from .explanation_validator import validate_explanation
 from ..rag.fact_cache import FactCache
 from .llm_parser import LLMParser
 from .llm_client import LLMClient
+import traceback
 from app.utils.performance_profiler import profile_time
 
 from .question_semantic import (
@@ -422,7 +423,11 @@ class QuizGenerator:
                 return None
 
             # Stage 2: Content - Question focus validation
-            if not validate_question_focus(question, answer):
+            if not validate_question_focus(
+                question,
+                answer,
+                supporting_fact=sanitized_supporting_fact
+            ):
                 log_validation_failure(question, "focus", f"Question doesn't focus on concept '{answer}'")
                 return None
 
@@ -442,6 +447,9 @@ class QuizGenerator:
             # Stage 6: Attach grounding fields
             correct_letter = question.get('correct', '')
             correct_text = get_correct_text_from_options(question.get('options', []), correct_letter)
+            print("question:", type(question), question)
+            print("fact_data:", type(fact_data), fact_data)
+            print("fact:", type(fact), fact)
             supporting_fact = question.get('supporting_fact') or fact_data.get('supporting_fact') or fact
 
             if not attach_grounding_fields(question, correct_text, sanitized_supporting_fact, context=fact):
@@ -461,9 +469,9 @@ class QuizGenerator:
 
             return question
 
-        except Exception as e:
-            print(f"Error generating from fact: {e}")
-            return None
+        except Exception:
+            traceback.print_exc()
+            raise
 
     # =========================================================================
     # MULTIPLE CHOICE GENERATION

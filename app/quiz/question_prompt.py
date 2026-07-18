@@ -11,10 +11,7 @@ Architecture Rule:
 
 
 def build_fact_question_prompt(
-    fact: str,
-    answer: str,
-    topic: str,
-    style_hint: str = None
+    fact: str, answer: str, topic: str, style_hint: str = None
 ) -> str:
     """
     Build a grounded multiple-choice question generation prompt.
@@ -134,15 +131,28 @@ Avoid using the same opening repeatedly.
 
 Good openings include:
 
-- "Which technology..."
-- "Which service..."
-- "Which concept..."
-- "Which feature..."
-- "Which option best describes..."
-- "Which statement best describes..."
-- "What allows..."
-- "What enables..."
-- "Which cloud service..."
+Vary the reasoning instead of merely varying the first words.
+
+Questions may focus on:
+
+• purpose
+• function
+• behavior
+• characteristics
+• role
+• usage
+• scenario
+• identifying the concept from its behavior
+
+Avoid relying on repetitive templates.
+
+Do not repeatedly begin questions with:
+- Which technology...
+- Which service...
+- Which concept...
+- Which cloud service...
+
+Write naturally, as if written by an experienced instructor.
 
 Do not begin every question with "Which technology".
 

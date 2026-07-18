@@ -638,6 +638,15 @@ class SemanticConceptExtractor:
     def _normalize_concept(self, concept: str) -> str:
         """Normalize concept text."""
         concept = concept.strip()
+
+        # Remove leading articles
+        concept = re.sub(
+            r"^(a|an|the)\s+",
+            "",
+            concept,
+            flags=re.IGNORECASE,
+        )
+
         concept = re.sub(r"\s+", " ", concept)
         concept = concept.title()
 

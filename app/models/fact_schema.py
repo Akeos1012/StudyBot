@@ -309,15 +309,12 @@ _QUESTION_DIFFICULTY_MAP = {
     ("process", "scenario"): 0.7,
     ("concept", "definition"): 0.3,
     ("concept", "scenario"): 0.6,
-
     ("technology", "definition"): 0.4,
     ("technology", "comparison"): 0.6,
     ("technology", "scenario"): 0.7,
-
     ("hardware", "definition"): 0.4,
     ("hardware", "comparison"): 0.6,
     ("hardware", "application"): 0.7,
-
     ("software", "definition"): 0.4,
     ("software", "comparison"): 0.6,
     ("software", "application"): 0.7,
@@ -532,16 +529,17 @@ def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
     return str(definition).strip() if definition else None
 
 
-def _normalize_concept_type(fact: Dict[str, Any], concept: str, definition: str) -> str:
+def _normalize_concept_type(fact: Dict[str, Any]) -> str:
     """Normalize the concept type field."""
+
     concept_type = fact.get("concept_type")
-    if not concept_type:
-        return detect_concept_type(concept, definition)
+
     if isinstance(concept_type, str):
         for ct in ConceptType:
             if ct.value == concept_type.lower():
                 return ct.value
-    return concept_type
+
+    return ConceptType.CONCEPT.value
 
 
 def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -563,7 +561,7 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if len(definition) < 5:
         return None
 
-    concept_type = _normalize_concept_type(fact, concept, definition)
+    concept_type = _normalize_concept_type(fact)
 
     return {
         "concept": concept,
@@ -596,7 +594,7 @@ def create_fact(
         raise ValueError(f"Invalid concept name: {concept}")
 
     if not concept_type:
-        concept_type = detect_concept_type(concept, definition)
+        concept_type = ConceptType.CONCEPT.value
 
     return {
         "concept": concept.strip(),
@@ -619,95 +617,46 @@ def create_fact(
 
 def detect_concept_type(concept: str, definition: str = "") -> str:
     """
-    Detect concept type using priority-based classification.
+    Detect concept type using centralized keyword scoring.
 
     Priority:
-    1. Exact concept patterns
-    2. Strong definition signals
-    3. Keyword matching
-    4. Generic fallback
+    1. Exact concept overrides
+    2. Explicit concept keywords
+    3. Definition keyword scoring
+    4. Generic concept fallback
     """
 
-    concept_text = concept.lower().strip()
+    concept_key = concept.lower().strip()
     text = f"{concept} {definition}".lower()
 
-    # Highest priority: exact concept overrides
+    # Exact known concepts
     exact_overrides = {
-        "containerization": "technology",
-        "cloud storage": "technology",
-        "cloud computing": "technology",
-        "edge devices": "hardware",
-        "virtual machine": "technology",
-        "operating system": "software",
-        "latency": "metric",
-        "throughput": "metric",
-        "bandwidth": "metric",
+        "containerization": ConceptType.TECHNOLOGY.value,
+        "cloud storage": ConceptType.TECHNOLOGY.value,
+        "cloud computing": ConceptType.TECHNOLOGY.value,
+        "edge devices": ConceptType.HARDWARE.value,
+        "virtual machine": ConceptType.TECHNOLOGY.value,
+        "operating system": ConceptType.SOFTWARE.value,
+        "latency": ConceptType.METRIC.value,
+        "throughput": ConceptType.METRIC.value,
+        "bandwidth": ConceptType.METRIC.value,
     }
 
-    if concept_text in exact_overrides:
-        return exact_overrides[concept_text]
+    if concept_key in exact_overrides:
+        return exact_overrides[concept_key]
 
-    # Strong metric detection
-    metric_terms = [
-        "latency",
-        "throughput",
-        "bandwidth",
-        "accuracy",
-        "response time",
-        "utilization",
-        "percentage",
-        "rate",
-        "measurement",
-    ]
-
-    if any(term in text for term in metric_terms):
-        return "metric"
-
-    # Hardware detection
-    hardware_terms = [
-        "device",
-        "hardware",
-        "sensor",
-        "processor",
-        "machine",
-        "physical component",
-    ]
-
-    if any(term in text for term in hardware_terms):
-        return "hardware"
-
-    # Technology / process detection
-    technology_terms = [
-        "technology",
-        "method",
-        "approach",
-        "framework",
-        "platform",
-        "process",
-        "deployment",
-        "container",
-    ]
-
-    if any(term in text for term in technology_terms):
-        return "technology"
-
-    # Existing keyword system as fallback
-    type_scores = {}
+    scores = {}
 
     for concept_type, keywords in CONCEPT_TYPE_KEYWORDS.items():
-        score = sum(
-            1
-            for keyword in keywords
-            if keyword in text
-        )
+        score = sum(1 for keyword in keywords if keyword in text)
 
-        if score > 0:
-            type_scores[concept_type.value] = score
+        if score:
+            scores[concept_type.value] = score
 
-    if type_scores:
-        return max(type_scores, key=type_scores.get)
+    if scores:
+        return max(scores, key=scores.get)
 
-    return "concept"
+    return ConceptType.CONCEPT.value
 
 
 # ============================================================================

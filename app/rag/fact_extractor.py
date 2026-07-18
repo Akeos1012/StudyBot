@@ -9,7 +9,6 @@ import logging
 from ..models.fact_schema import (
     create_fact,
     is_weak_concept,
-    detect_concept_type,
     ConceptType,
 )
 
@@ -850,38 +849,6 @@ class FactExtractor:
             "Imap": "IMAP",
         }
 
-        # Concept type overrides
-        self.concept_type_overrides = {
-            "Quick Sort": "algorithm",
-            "Merge Sort": "algorithm",
-            "Bubble Sort": "algorithm",
-            "Binary Search": "algorithm",
-            "Dynamic Programming": "algorithm",
-            "Greedy": "algorithm",
-            "Divide and Conquer": "algorithm",
-            "Recursion": "algorithm",
-            "Deep Learning": "model",
-            "Neural Network": "model",
-            "CNN": "model",
-            "RNN": "model",
-            "Transformer": "model",
-            "Time Complexity": "metric",
-            "Space Complexity": "metric",
-            "Big O": "metric",
-            "Array": "data_structure",
-            "Linked List": "data_structure",
-            "Stack": "data_structure",
-            "Queue": "data_structure",
-            "Tree": "data_structure",
-            "Graph": "data_structure",
-            "DBMS": "system",
-            "Operating System": "system",
-            "File System": "system",
-            "Normalization": "process",
-            "Backpropagation": "process",
-            "Gradient Descent": "process",
-        }
-
         # Initialize components
         self.heading_filter = HeadingFilter()
         self.concept_validator = ConceptValidator()
@@ -949,7 +916,8 @@ class FactExtractor:
         # Filename is the FINAL fallback only
         if not concept:
             concept = self._extract_concept_from_filename(source)
-
+        
+        print("EXTRACTED CONCEPT:", concept)
         if not concept:
             return None, RejectionInfo(
                 RejectionReason.NO_CONCEPT, "no_concept_extracted", text
@@ -957,13 +925,15 @@ class FactExtractor:
 
         is_valid, reason = self.concept_validator.is_valid(concept)
         if not is_valid:
+            print("REJECTED CONCEPT:", concept, "|", reason)
             return None, RejectionInfo(RejectionReason.INVALID_CONCEPT, reason, text)
 
         concept = " ".join(concept.split()[:4])
 
         try:
             concept_type = self.concept_type_overrides.get(
-                concept, detect_concept_type(concept, cleaned)
+                concept,
+                "unknown"
             )
             source_note = (
                 Path(str(source)).name
@@ -989,8 +959,13 @@ class FactExtractor:
             fact["answer"] = concept
             fact["weight"] = weight
 
-            return clean_fact(fact), None
+            cleaned_fact = clean_fact(fact)
 
+            if not cleaned_fact:
+                print("CLEAN FACT FAILED:", fact)
+
+            return cleaned_fact, None
+        
         except ValueError as e:
             return None, RejectionInfo(RejectionReason.CREATION_ERROR, str(e), text)
         except Exception as e:

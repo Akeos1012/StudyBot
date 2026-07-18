@@ -26,6 +26,7 @@ from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
 from ..quiz.quiz_generator import QuizGenerator
 from ..monitoring.quiz_metrics import QuizMetrics
+from ..quiz.monitoring.performance_monitor import PerformanceMonitor
 from ..quiz.validation_logger import set_metrics, get_metrics
 from ..config.quiz_config import (
     MIN_POOL_SIZE,
@@ -166,6 +167,8 @@ class QuizService:
         start_time = time.time()
         print("\n========== QUIZ SERVICE ==========")
         print("Entered get_or_generate_questions()")
+        performance_monitor = PerformanceMonitor()
+        performance_monitor.start()
         print("Topic:", topic)
         print("Fresh:", fresh)
         print("Count:", count)
@@ -211,7 +214,25 @@ class QuizService:
 
         result = sampled or pool[:count]
 
-        logger.info(f"Quiz generation completed in {time.time() - start_time:.2f}s")
+
+        performance_data = performance_monitor.stop()
+
+        print("\n========== HARDWARE PERFORMANCE ==========")
+
+        for key, value in performance_data.items():
+            print(f"{key}: {value}")
+
+        print("==========================================\n")
+
+        logger.info(
+            "HARDWARE PERFORMANCE: %s",
+            performance_data
+        )
+
+        logger.info(
+            "Quiz generation completed in %.2fs",
+            time.time() - start_time
+        )
 
         return result
 

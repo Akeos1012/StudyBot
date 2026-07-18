@@ -11,13 +11,45 @@ Tracks:
 import time
 import os
 import psutil
-
+import subprocess
 
 class PerformanceMonitor:
 
     def __init__(self):
         self.process = psutil.Process(os.getpid())
         self.start_time = None
+
+    def get_gpu_info(self):
+        """
+        Get NVIDIA GPU metrics using nvidia-smi.
+        """
+
+        try:
+            result = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
+                encoding="utf-8",
+            )
+
+            gpu, memory_used, memory_total, temperature = result.strip().split(",")
+
+            return {
+                "gpu_usage_percent": int(gpu.strip()),
+                "gpu_memory_used_mb": int(memory_used.strip()),
+                "gpu_memory_total_mb": int(memory_total.strip()),
+                "gpu_temperature_c": int(temperature.strip()),
+            }
+
+        except Exception:
+            return {
+                "gpu_usage_percent": 0,
+                "gpu_memory_used_mb": 0,
+                "gpu_memory_total_mb": 0,
+                "gpu_temperature_c": 0,
+            }
 
 
     def start(self):
@@ -34,7 +66,7 @@ class PerformanceMonitor:
 
         memory = self.process.memory_info()
 
-        return {
+        performance = {
             "generation_time": round(elapsed, 4),
 
             "cpu_usage_percent": psutil.cpu_percent(
@@ -55,6 +87,12 @@ class PerformanceMonitor:
             if psutil.cpu_freq()
             else 0
         }
+
+        performance.update(
+            self.get_gpu_info()
+        )
+
+        return performance
 
 
 if __name__ == "__main__":

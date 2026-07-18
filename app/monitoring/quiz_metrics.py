@@ -82,6 +82,22 @@ class QuizMetrics:
         default_factory=list
     )
 
+    gpu_memory_samples: list = field(
+        default_factory=list
+    )
+
+    gpu_temperature_samples: list = field(
+        default_factory=list
+    )
+
+    gpu_memory_samples: list = field(
+        default_factory=list
+    )
+
+    gpu_temperature_samples: list = field(
+        default_factory=list
+    )
+
 
 
     # ==========================
@@ -152,7 +168,23 @@ class QuizMetrics:
             round(usage, 2)
         )
 
+    def record_gpu_memory(self, memory: float):
+        """
+        Record GPU memory usage.
+        """
 
+        self.gpu_memory_samples.append(
+            round(memory, 2)
+        )
+
+    def record_gpu_temperature(self, temperature: float):
+        """
+        Record GPU temperature.
+        """
+
+        self.gpu_temperature_samples.append(
+            round(temperature, 2)
+        )
 
     def generation_time(self):
 
@@ -271,6 +303,17 @@ class QuizMetrics:
                     self.gpu_samples
                 ),
 
+
+            "average_gpu_memory_mb":
+                self.average(
+                    self.gpu_memory_samples
+                ),
+
+
+            "average_gpu_temperature_c":
+                self.average(
+                    self.gpu_temperature_samples
+                ),            
 
 
             # ==========================

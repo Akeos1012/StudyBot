@@ -142,14 +142,6 @@ class QuizService:
             metrics.questions_generated - metrics.questions_accepted,
         )
 
-        logger.info(
-            "QUIZ METRICS: %s",
-            metrics.report()
-        )
-
-        print("\n========== QUIZ METRICS ==========")
-        print(metrics.report())
-
         return questions[:count]
 
     def get_or_generate_questions(
@@ -216,6 +208,32 @@ class QuizService:
 
 
         performance_data = performance_monitor.stop()
+
+        metrics = get_metrics()
+
+        if metrics:
+            metrics.record_cpu(
+                performance_data["cpu_usage_percent"]
+            )
+
+            metrics.record_ram(
+                performance_data["ram_usage_percent"]
+            )
+
+            metrics.record_gpu(
+                performance_data["gpu_usage_percent"]
+            )
+
+            metrics.record_gpu_memory(
+                performance_data["gpu_memory_used_mb"]
+            )
+
+            metrics.record_gpu_temperature(
+                performance_data["gpu_temperature_c"]
+            )
+
+            print("\n========== QUIZ METRICS ==========")
+            print(metrics.report())
 
         print("\n========== HARDWARE PERFORMANCE ==========")
 

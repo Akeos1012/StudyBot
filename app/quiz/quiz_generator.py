@@ -706,9 +706,12 @@ if __name__ == "__main__":
 
     gen = QuizGenerator()
 
+    facts = gen.fact_cache.get_facts("Cloud")
+
     result = gen.generate_questions(
-        topic="Cloud Computing",
-        count=5
+        topic="Cloud",
+        count=5,
+        supporting_facts=facts
     )
 
     print(json.dumps(result, indent=2))

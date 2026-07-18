@@ -36,6 +36,10 @@ class ConceptType(Enum):
     PARADIGM = "paradigm"
     APPLICATION = "application"
 
+    TECHNOLOGY = "technology"
+    HARDWARE = "hardware"
+    SOFTWARE = "software"
+
     @classmethod
     def get_compatible_types(cls, type_name: str) -> List[str]:
         """Get types that can be meaningfully compared with this type."""
@@ -286,6 +290,9 @@ _QUESTION_TYPE_MAP = {
     "language": ["definition"],
     "paradigm": ["definition", "comparison"],
     "application": ["scenario", "application"],
+    "technology": ["definition", "comparison", "scenario"],
+    "hardware": ["definition", "comparison", "application"],
+    "software": ["definition", "comparison", "application"],
 }
 
 # ===== Type -> Difficulty Map =====
@@ -302,6 +309,18 @@ _QUESTION_DIFFICULTY_MAP = {
     ("process", "scenario"): 0.7,
     ("concept", "definition"): 0.3,
     ("concept", "scenario"): 0.6,
+
+    ("technology", "definition"): 0.4,
+    ("technology", "comparison"): 0.6,
+    ("technology", "scenario"): 0.7,
+
+    ("hardware", "definition"): 0.4,
+    ("hardware", "comparison"): 0.6,
+    ("hardware", "application"): 0.7,
+
+    ("software", "definition"): 0.4,
+    ("software", "comparison"): 0.6,
+    ("software", "application"): 0.7,
 }
 
 # ===== Type Hierarchy =====
@@ -599,17 +618,95 @@ def create_fact(
 
 
 def detect_concept_type(concept: str, definition: str = "") -> str:
-    """Auto-detect the concept type based on keywords."""
+    """
+    Detect concept type using priority-based classification.
+
+    Priority:
+    1. Exact concept patterns
+    2. Strong definition signals
+    3. Keyword matching
+    4. Generic fallback
+    """
+
+    concept_text = concept.lower().strip()
     text = f"{concept} {definition}".lower()
 
+    # Highest priority: exact concept overrides
+    exact_overrides = {
+        "containerization": "technology",
+        "cloud storage": "technology",
+        "cloud computing": "technology",
+        "edge devices": "hardware",
+        "virtual machine": "technology",
+        "operating system": "software",
+        "latency": "metric",
+        "throughput": "metric",
+        "bandwidth": "metric",
+    }
+
+    if concept_text in exact_overrides:
+        return exact_overrides[concept_text]
+
+    # Strong metric detection
+    metric_terms = [
+        "latency",
+        "throughput",
+        "bandwidth",
+        "accuracy",
+        "response time",
+        "utilization",
+        "percentage",
+        "rate",
+        "measurement",
+    ]
+
+    if any(term in text for term in metric_terms):
+        return "metric"
+
+    # Hardware detection
+    hardware_terms = [
+        "device",
+        "hardware",
+        "sensor",
+        "processor",
+        "machine",
+        "physical component",
+    ]
+
+    if any(term in text for term in hardware_terms):
+        return "hardware"
+
+    # Technology / process detection
+    technology_terms = [
+        "technology",
+        "method",
+        "approach",
+        "framework",
+        "platform",
+        "process",
+        "deployment",
+        "container",
+    ]
+
+    if any(term in text for term in technology_terms):
+        return "technology"
+
+    # Existing keyword system as fallback
     type_scores = {}
+
     for concept_type, keywords in CONCEPT_TYPE_KEYWORDS.items():
-        score = sum(1 for keyword in keywords if keyword in text)
+        score = sum(
+            1
+            for keyword in keywords
+            if keyword in text
+        )
+
         if score > 0:
             type_scores[concept_type.value] = score
 
     if type_scores:
         return max(type_scores, key=type_scores.get)
+
     return "concept"
 
 

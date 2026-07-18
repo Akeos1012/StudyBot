@@ -253,11 +253,13 @@ class QuizService:
 
         extracted = []
 
-        print("\n===== NOTES DEBUG =====")
-        print(type(notes))
-        print(type(notes[0]))
-        pprint(notes[0])
-        print("=======================\n")
+
+        # Notes debug disabled
+        # print("\n===== NOTES DEBUG =====")
+        # print(type(notes))
+        # print(type(notes[0]))
+        # pprint(notes[0])
+        # print("=======================\n")
 
         for note in notes:
             source = note["path"]
@@ -289,9 +291,10 @@ class QuizService:
             if len(questions) >= target_count:
                 break
             
-            print("\n===== FACT DEBUG =====")
-            pprint(fact_data)
-            print("======================")
+            # Fact debug disabled
+            # print("\n===== FACT DEBUG =====")
+            # pprint(fact_data)
+            # print("======================")
             fact = (
                 fact_data.get("supporting_fact")
                 or fact_data.get("definition")

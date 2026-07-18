@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 _current_metrics = None
 
 
@@ -31,8 +35,8 @@ def log_validation_failure(
     and record metrics.
     """
 
-    print(f"\n❌ VALIDATION FAILED at stage: {stage}")
-    print(f"   Reason: {reason}")
+    logger.debug(f"VALIDATION FAILED | Stage: {stage}")
+    logger.debug(f"Reason: {reason}")
 
 
     # Record failure for metrics
@@ -42,24 +46,22 @@ def log_validation_failure(
 
     if details:
         for key, value in details.items():
-            print(f"   {key}: {value}")
+            logger.debug(f"{key}: {value}")
 
 
     if question:
-        print(
-            f"   Question preview: "
-            f"{question.get('question', 'N/A')[:80]}..."
+        logger.debug(
+            f"Question: {question.get('question', 'N/A')[:80]}..."
         )
 
-        print(
-            f"   Options: {question.get('options', 'N/A')}"
+        logger.debug(
+            f"Options: {question.get('options', 'N/A')}"
         )
 
-        print(
-            f"   Correct: {question.get('correct', 'N/A')}"
+        logger.debug(
+            f"Correct: {question.get('correct', 'N/A')}"
         )
 
-        print(
-            f"   Concept: "
-            f"{question.get('concept', 'N/A') or question.get('correct_text', 'N/A')}"
+        logger.debug(
+            f"Concept: {question.get('concept', 'N/A') or question.get('correct_text', 'N/A')}"
         )

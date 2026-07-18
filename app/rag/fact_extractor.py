@@ -5,10 +5,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from .fact_cleaner import clean_fact
 import logging
+from collections import Counter
 
 from ..models.fact_schema import (
     create_fact,
     is_weak_concept,
+    detect_concept_type,
     ConceptType,
 )
 
@@ -388,8 +390,16 @@ class SemanticConceptExtractor:
 
     def __init__(self, concept_validator):
         self.concept_validator = concept_validator
-        self._concept_type_overrides = concept_validator.concept_type_overrides
         self._valid_acronyms = self.VALID_ACRONYMS
+
+        self._concept_type_overrides = {
+            "AI Model",
+            "AI Behavior",
+            "Computer Vision",
+            "Data Augmentation",
+            "Deep Learning",
+            "Machine Learning",
+        }
 
     def extract(self, text: str) -> Optional[str]:
         """Extract a concept from text using strict semantic rules."""
@@ -461,6 +471,67 @@ class SemanticConceptExtractor:
 
         return None
 
+    def _has_valid_concept_structure(self, concept: str) -> bool:
+        """
+        Reject sentence fragments pretending to be concepts.
+        """
+
+        if not concept:
+            return False
+
+        words = concept.split()
+
+        # Concepts should not become mini-sentences
+        if len(words) > 4:
+            return False
+
+        bad_fragment_starts = {
+            "all",
+            "most",
+            "some",
+            "they",
+            "it",
+            "this",
+            "that",
+            "these",
+            "those",
+            "each",
+            "every",
+            "when",
+            "where",
+            "why",
+            "how",
+            "if",
+            "because",
+            "until",
+            "while",
+        }
+
+        if words[0].lower() in bad_fragment_starts:
+            return False
+
+        # Reject sentence-like endings
+        sentence_words = {
+            "is",
+            "are",
+            "was",
+            "were",
+            "works",
+            "work",
+            "helps",
+            "uses",
+            "allows",
+            "provides",
+            "contains",
+            "includes",
+            "focuses",
+        }
+
+        if words[-1].lower() in sentence_words:
+            return False
+
+        return True
+
     def _is_canonical_concept(self, concept: str) -> bool:
         """
         Determine if a concept is a canonical noun phrase suitable for quiz questions.
@@ -481,6 +552,9 @@ class SemanticConceptExtractor:
 
         concept_lower = concept.lower()
         words = concept_lower.split()
+        if not self._has_valid_concept_structure(concept):
+            logger.debug(f"Rejected '{concept}': invalid concept structure")
+            return False
 
         if not words:
             return False
@@ -508,13 +582,12 @@ class SemanticConceptExtractor:
 
         # 4. REJECT section labels at end (unless overridden)
         if last_word in self.SECTION_LABELS:
-            # Allow if the concept is in overrides (e.g., "Architecture" as a concept)
-            if concept in self._concept_type_overrides:
-                return True
-            # Allow single-word section labels (e.g., "Architecture" can be a concept)
             if len(words) == 1:
                 return True
-            logger.debug(f"Rejected '{concept}': ends with section label '{last_word}'")
+
+            logger.debug(
+                f"Rejected '{concept}': ends with section label '{last_word}'"
+            )
             return False
 
         # 5. Check for section labels in the middle
@@ -726,36 +799,6 @@ class ConceptValidator:
     """
 
     def __init__(self):
-        self.concept_type_overrides = {
-            "Quick Sort": "algorithm",
-            "Merge Sort": "algorithm",
-            "Bubble Sort": "algorithm",
-            "Binary Search": "algorithm",
-            "Dynamic Programming": "algorithm",
-            "Greedy": "algorithm",
-            "Divide and Conquer": "algorithm",
-            "Recursion": "algorithm",
-            "Deep Learning": "model",
-            "Neural Network": "model",
-            "CNN": "model",
-            "RNN": "model",
-            "Transformer": "model",
-            "Time Complexity": "metric",
-            "Space Complexity": "metric",
-            "Big O": "metric",
-            "Array": "data_structure",
-            "Linked List": "data_structure",
-            "Stack": "data_structure",
-            "Queue": "data_structure",
-            "Tree": "data_structure",
-            "Graph": "data_structure",
-            "DBMS": "system",
-            "Operating System": "system",
-            "File System": "system",
-            "Normalization": "process",
-            "Backpropagation": "process",
-            "Gradient Descent": "process",
-        }
 
         self.weak_single_words = {
             "concept",
@@ -811,6 +854,7 @@ class ConceptValidator:
 class FactExtractor:
     def __init__(self, notes_path="sample_notes"):
         self.notes_path = Path(notes_path)
+        self.concept_debug_counter = Counter()
 
         # Acronym mapping
         self.acronyms = {
@@ -855,6 +899,18 @@ class FactExtractor:
         self.semantic_extractor = SemanticConceptExtractor(self.concept_validator)
 
     # ========== CORE UTILITIES ==========
+
+    def _print_concept_summary(self, enabled=False):
+        if not enabled:
+            return
+        """
+        Per-concept extraction logging is disabled to keep
+        the terminal output concise.
+
+        Statistics are still collected internally and can be
+        summarized elsewhere if needed.
+        """
+        self.concept_debug_counter.clear()
 
     def normalize_concept(self, text: str) -> str:
         """Normalize concept text: title case, fix acronyms."""
@@ -916,12 +972,13 @@ class FactExtractor:
         # Filename is the FINAL fallback only
         if not concept:
             concept = self._extract_concept_from_filename(source)
-        
-        print("EXTRACTED CONCEPT:", concept)
+
         if not concept:
             return None, RejectionInfo(
                 RejectionReason.NO_CONCEPT, "no_concept_extracted", text
             )
+
+        self.concept_debug_counter[concept] += 1
 
         is_valid, reason = self.concept_validator.is_valid(concept)
         if not is_valid:
@@ -931,10 +988,7 @@ class FactExtractor:
         concept = " ".join(concept.split()[:4])
 
         try:
-            concept_type = self.concept_type_overrides.get(
-                concept,
-                "unknown"
-            )
+            concept_type = detect_concept_type(concept, cleaned)
             source_note = (
                 Path(str(source)).name
                 if str(source) and str(source) != "inline"
@@ -1040,6 +1094,8 @@ class FactExtractor:
             stats.extracted_facts += 1
 
         logger.info(f"Extraction summary: {stats.summary()}")
+
+        self._print_concept_summary()
 
         return facts
 

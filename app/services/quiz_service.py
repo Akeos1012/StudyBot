@@ -177,6 +177,7 @@ class QuizService:
 
         if len(pool) < MIN_POOL_SIZE:
             print("Generating new questions...")
+            metrics = get_metrics()
             logger.info(f"Pool size {len(pool)} is below minimum. Generating more.")
 
             new_questions = self.generate_questions_for_topic(
@@ -189,6 +190,12 @@ class QuizService:
                 "QuizGenerator metrics: %s",
                 generator_metrics
             )
+
+            metrics = get_metrics()
+
+            if metrics:
+                metrics.llm_calls = generator_metrics["llm_calls"]
+                metrics.llm_time = generator_metrics["llm_time"]
 
             real_questions = [
                 q for q in new_questions if not q.get("_is_fallback", False)
@@ -234,18 +241,6 @@ class QuizService:
 
             print("\n========== QUIZ METRICS ==========")
             print(metrics.report())
-
-        print("\n========== HARDWARE PERFORMANCE ==========")
-
-        for key, value in performance_data.items():
-            print(f"{key}: {value}")
-
-        print("==========================================\n")
-
-        logger.info(
-            "HARDWARE PERFORMANCE: %s",
-            performance_data
-        )
 
         logger.info(
             "Quiz generation completed in %.2fs",

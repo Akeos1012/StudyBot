@@ -90,15 +90,6 @@ class QuizMetrics:
         default_factory=list
     )
 
-    gpu_memory_samples: list = field(
-        default_factory=list
-    )
-
-    gpu_temperature_samples: list = field(
-        default_factory=list
-    )
-
-
 
     # ==========================
     # Cache Metrics

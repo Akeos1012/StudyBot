@@ -154,7 +154,15 @@ def attach_grounding_fields(
         return False
 
     question["correct_text"] = correct_text or ""
-    question["supporting_fact"] = normalize_supporting_fact(supporting_fact or "")
+    question["supporting_fact"] = normalize_supporting_fact(
+        supporting_fact or ""
+    )
+
+    # Keep full supporting fact for explanation generation
+    if len(question["supporting_fact"].split()) > MAX_SUPPORTING_WORDS:
+        question["supporting_fact"] = " ".join(
+            question["supporting_fact"].split()[:MAX_SUPPORTING_WORDS]
+        )
     question["fact_id"] = (
     question.get("fact_id")
         or f"fact_{abs(hash(question['supporting_fact']))}"

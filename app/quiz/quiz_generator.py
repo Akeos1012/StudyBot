@@ -37,6 +37,7 @@ from .question_grounding import (
 )
 
 from .question_validator import (
+    validate_distractors,
     validate_structure,
     normalize_and_validate_correct_field,
     validate_question_focus,
@@ -395,7 +396,10 @@ class QuizGenerator:
 
             # Stage 1: Structure
             if not validate_structure(question):
-                log_validation_failure(question, "structure", "Structure validation failed")
+                return None
+
+            # Stage 1.5: Distractors
+            if not validate_distractors(question):
                 return None
 
             # Stage 2: Content - Grounding

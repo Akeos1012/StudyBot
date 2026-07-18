@@ -10,8 +10,6 @@ Responsible only for cleaning text fragments.
 
 import re
 
-from .question_constants import MAX_SUPPORTING_WORDS
-
 
 def normalize_supporting_fact(text: str) -> str:
     """
@@ -66,11 +64,8 @@ def normalize_supporting_fact(text: str) -> str:
     ):
         return ""
 
-    # Limit fact length
-    words = cleaned.split()
-
-    if len(words) > MAX_SUPPORTING_WORDS:
-        cleaned = " ".join(words[:MAX_SUPPORTING_WORDS]).rstrip(" .")
+    # Do not truncate here.
+    # Explanation and grounding require the full supporting fact.
 
     # Reject non-facts
     if cleaned.lower().startswith(

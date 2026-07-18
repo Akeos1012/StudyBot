@@ -61,7 +61,12 @@ def build_consistent_explanation(
                 clean_fact = supporting_fact
 
                 if clean_fact.lower().startswith(correct_text.lower()):
-                    explanation = f"{clean_fact}."
+                    clean_fact = clean_fact[len(correct_text):].strip()
+
+                    if clean_fact:
+                        explanation = f"{correct_text} {clean_fact}"
+                    else:
+                        explanation = f"{correct_text} is confirmed by the supporting fact."
                 else:
                     clean_fact_lower = clean_fact.lower()
                     correct_lower = correct_text.lower()
@@ -89,8 +94,12 @@ def build_consistent_explanation(
                         else:
                             explanation = clean_fact
 
-                if len(explanation.split()) <= MAX_EXPLANATION_WORDS:
-                    return clean_explanation_text(explanation)
+                if len(explanation.split()) > MAX_EXPLANATION_WORDS:
+                    explanation = " ".join(
+                        explanation.split()[:MAX_EXPLANATION_WORDS]
+                    ) + "."
+
+                return clean_explanation_text(explanation)
 
     if context:
         cleaned_context = normalize_supporting_fact(context)
@@ -98,8 +107,12 @@ def build_consistent_explanation(
         if cleaned_context:
             explanation = cleaned_context
 
-            if len(explanation.split()) <= MAX_EXPLANATION_WORDS:
-                return explanation
+            if len(explanation.split()) > MAX_EXPLANATION_WORDS:
+                explanation = " ".join(
+                    explanation.split()[:MAX_EXPLANATION_WORDS]
+                ) + "."
+
+            return explanation
 
     return ""
 

@@ -88,7 +88,7 @@ STRICT RULES:
 
    The reader should know which concept is being discussed before reading the answer choices.
 
-   Whenever it sounds natural, include "{answer}" in the question itself.
+   For abstract concepts, infrastructure terms, systems, technologies, and named concepts, ALWAYS include "{answer}" in the question text.
 
    Avoid writing overly generic questions that could describe many different concepts.
 
@@ -115,9 +115,27 @@ STRICT RULES:
 6. Return exactly 4 options:
 
    - Option A must be exactly "{answer}"
-   - Options B, C, and D must be plausible but incorrect
-   - Distractors must NOT be variations of the correct answer
-   - Distractors must NOT introduce outside knowledge
+   - Options B, C, and D must be real concepts from the FACT or closely related concepts already implied by the FACT.
+   - NEVER write placeholders.
+   - NEVER write:
+     "Distractor"
+     "Distractor Option"
+     "Option B"
+     "Option C"
+     "Option D"
+     "None of the above"
+     "Something else"
+
+   If you cannot create valid distractors, return:
+
+   {{
+     "question": "",
+     "options": [],
+     "correct": "",
+     "explanation": ""
+   }}
+
+   Distractors must be meaningful incorrect answers.
 
 7. Explanation requirements:
 

@@ -14,6 +14,8 @@ from .llm_parser import LLMParser
 from .llm_client import LLMClient
 import traceback
 from app.config import settings
+from .distractor_selector import DistractorSelector
+from random import shuffle
 
 from app.utils.performance_profiler import profile_time
 
@@ -23,10 +25,7 @@ from .question_semantic import (
 
 from .validation_logger import log_validation_failure
 
-from .options_parser import (
-    normalize_options,
-    get_correct_text_from_options,
-)
+from .options_parser import get_correct_text_from_options
 
 from .question_grounding import (
     validate_grounding,
@@ -209,6 +208,7 @@ class QuizGenerator:
         self.parser = LLMParser()
         self.scorer = QuestionScorer()
         self.min_quality_score = min_quality_score
+        self.distractor_selector = DistractorSelector()
 
         # State for current generation
         self._supporting_facts = []
@@ -381,11 +381,23 @@ class QuizGenerator:
 
             question = questions[0]
 
-            # Format options immediately
-            options = question.get('options', [])
-            if options:
-                question['options'] = normalize_options(options)
+            distractors = self.distractor_selector.select_distractors(
+                facts=self._supporting_facts,
+                target_fact=fact_data,
+                count=3,
+            )
 
+            options = distractors + [answer]
+            shuffle(options)
+
+            question["options"] = [
+                f"{chr(65 + i)}. {text}"
+                for i, text in enumerate(options)
+            ]
+
+            question["correct"] = chr(
+                65 + options.index(answer)
+            )
             # ===== VALIDATION PIPELINE =====
 
             # Stage 1: Structure

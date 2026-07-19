@@ -28,11 +28,7 @@ from ..quiz.quiz_generator import QuizGenerator
 from ..monitoring.quiz_metrics import QuizMetrics
 from ..quiz.monitoring.performance_monitor import PerformanceMonitor
 from ..quiz.validation_logger import set_metrics, get_metrics
-from ..config.quiz_config import (
-    MIN_POOL_SIZE,
-    MAX_FACTS_PER_NOTE,
-    MAX_NOTES_FOR_CONTEXT,
-)
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +171,7 @@ class QuizService:
         pool = cache.get_pool(topic, subtopic, difficulty, question_type)
         print("Pool size:", len(pool))
 
-        if len(pool) < MIN_POOL_SIZE:
+        if len(pool) < settings.MIN_POOL_SIZE:
             print("Generating new questions...")
             metrics = get_metrics()
             logger.info(f"Pool size {len(pool)} is below minimum. Generating more.")
@@ -321,7 +317,7 @@ class QuizService:
     ) -> List[Dict[str, Any]]:
         questions = []
 
-        for fact_data in facts[:MAX_FACTS_PER_NOTE]:
+        for fact_data in facts[:settings.MAX_FACTS_PER_NOTE]:
             if len(questions) >= target_count:
                 break
             

@@ -14,6 +14,8 @@ from ..rag.fact_cache import FactCache
 from .llm_parser import LLMParser
 from .llm_client import LLMClient
 import traceback
+from app.config import settings
+
 from app.utils.performance_profiler import profile_time
 
 from .question_semantic import (
@@ -84,21 +86,12 @@ INVALID_CONCEPT_WORDS = {
     'module'
 }
 
-# Maximum number of facts to process per generation request
 MAX_FACTS_PER_REQUEST = 30
-
-# Minimum quality score for a question to be accepted
-MIN_QUALITY_SCORE = 0.6
-
-# Similarity threshold for duplicate detection
 SIMILARITY_THRESHOLD = 0.90
 
-# Default number of attempts for retry
-DEFAULT_MAX_ATTEMPTS = 3
-
-# Default LLM model
-DEFAULT_MODEL = "qwen2.5:3b"
-
+MIN_QUALITY_SCORE = settings.MIN_QUALITY_SCORE
+DEFAULT_MAX_ATTEMPTS = settings.MAX_GENERATION_RETRIES
+DEFAULT_MODEL = settings.LLM_MODEL
 
 # ============================================================================
 # UTILITY FUNCTIONS

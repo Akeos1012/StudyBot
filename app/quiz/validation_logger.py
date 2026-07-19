@@ -35,9 +35,8 @@ def log_validation_failure(
     and record metrics.
     """
 
-    logger.debug(f"VALIDATION FAILED | Stage: {stage}")
-    logger.debug(f"Reason: {reason}")
-
+    logger.warning(f"VALIDATION FAILED | Stage: {stage}")
+    logger.warning(f"Reason: {reason}")
 
     # Record failure for metrics
     if _current_metrics:
@@ -50,11 +49,11 @@ def log_validation_failure(
 
 
     if question:
-        logger.debug(
+        logger.warning(
             f"Question: {question.get('question', 'N/A')[:80]}..."
         )
 
-        logger.debug(
+        logger.warning(
             f"Options: {question.get('options', 'N/A')}"
         )
 

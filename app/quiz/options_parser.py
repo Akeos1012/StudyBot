@@ -19,7 +19,7 @@ This module does NOT contain:
 """
 
 import re
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 
 # ============================================================================
 # CONSTANTS
@@ -111,42 +111,25 @@ def extract_option_parts(option: str) -> Tuple[str, str]:
     return "", option_stripped
 
 
-def extract_option_text(option: str) -> str:
+def extract_option_text(option) -> str:
     """
-    Extract the text content from a formatted option.
-
-    This is a convenience wrapper around extract_option_parts().
-
-    Args:
-        option: Formatted option string (e.g., "A) Memoization")
-
-    Returns:
-        Clean text content (e.g., "Memoization"), or empty string if not found.
-
-    Example:
-        >>> extract_option_text("A) Memoization")
-        'Memoization'
+    Extract the text content from either a string option or dict option.
     """
+
+    if isinstance(option, dict):
+        return option.get("text", "").strip()
+
     _, text = extract_option_parts(option)
     return text
 
-
-def extract_option_letter(option: str) -> str:
+def extract_option_letter(option) -> str:
     """
-    Extract the letter prefix from a formatted option.
-
-    This is a convenience wrapper around extract_option_parts().
-
-    Args:
-        option: Formatted option string (e.g., "A) Memoization")
-
-    Returns:
-        Letter (e.g., "A") or empty string if not found.
-
-    Example:
-        >>> extract_option_letter("A) Memoization")
-        'A'
+    Extract the option letter from either a string option or dict option.
     """
+
+    if isinstance(option, dict):
+        return option.get("id", "").strip().upper()
+
     letter, _ = extract_option_parts(option)
     return letter
 
@@ -173,50 +156,45 @@ def format_option(letter: str, text: str) -> str:
 # UTILITY FUNCTIONS
 # ============================================================================
 
-
-def get_correct_text_from_options(options: List[str], correct_letter: str) -> str:
+def get_correct_text_from_options(options, correct_letter: str) -> str:
     """
-    Get the text of the correct option given its letter.
+    Supports BOTH formats:
 
-    Args:
-        options: List of formatted options
-        correct_letter: The correct letter (A, B, C, D)
+    Old:
+        "A) Cloud Storage"
 
-    Returns:
-        The text of the correct option, or empty string if not found.
-
-    Example:
-        >>> options = ["A) Memoization", "B) Recursion", "C) Iteration", "D) Optimization"]
-        >>> get_correct_text_from_options(options, "A")
-        'Memoization'
+    New:
+        {"id": "A", "text": "Cloud Storage"}
     """
+
     if not options or not correct_letter:
         return ""
 
     correct_letter = correct_letter.strip().upper()
+
     for opt in options:
-        letter, text = extract_option_parts(opt)
-        if letter == correct_letter:
-            return text
+
+        # NEW dictionary format
+        if isinstance(opt, dict):
+            if opt.get("id", "").upper() == correct_letter:
+                return opt.get("text", "").strip()
+
+        # OLD string format
+        elif isinstance(opt, str):
+            letter, text = extract_option_parts(opt)
+            if letter == correct_letter:
+                return text
 
     return ""
 
 
-def get_distractor_texts(options: List[str], correct_letter: str) -> List[str]:
+def get_distractor_texts(options: List[Any], correct_letter: str) -> List[str]:
     """
-    Get the text of all distractors (non-correct options).
+    Return the text of all incorrect options.
 
-    Args:
-        options: List of formatted options
-        correct_letter: The correct letter (A, B, C, D)
-
-    Returns:
-        List of distractor texts.
-
-    Example:
-        >>> options = ["A) Memoization", "B) Recursion", "C) Iteration", "D) Optimization"]
-        >>> get_distractor_texts(options, "A")
-        ['Recursion', 'Iteration', 'Optimization']
+    Supports both:
+    - {"id": "A", "text": "..."}
+    - "A) ..."
     """
     if not options:
         return []
@@ -225,9 +203,19 @@ def get_distractor_texts(options: List[str], correct_letter: str) -> List[str]:
     distractors = []
 
     for opt in options:
-        letter, text = extract_option_parts(opt)
-        if letter and letter != correct_letter and text:
-            distractors.append(text)
+
+        # New dictionary format
+        if isinstance(opt, dict):
+            if opt.get("id", "").upper() != correct_letter:
+                text = opt.get("text", "").strip()
+                if text:
+                    distractors.append(text)
+
+        # Legacy string format
+        else:
+            letter, text = extract_option_parts(opt)
+            if letter and letter != correct_letter and text:
+                distractors.append(text)
 
     return distractors
 
@@ -302,30 +290,47 @@ def options_to_dict(options: List[str]) -> Dict[str, str]:
 # ============================================================================
 
 
-def validate_options_format(options: List[str]) -> bool:
+def validate_options_format(options) -> bool:
     """
-    Check if options are properly formatted.
+    Supports both:
 
-    Args:
-        options: List of options
+    Old:
+        "A) Cloud Storage"
 
-    Returns:
-        True if all options start with A), B), C), D) respectively and are non-empty.
-
-    Example:
-        >>> validate_options_format(["A) Memoization", "B) Recursion", "C) Iteration", "D) Optimization"])
-        True
-        >>> validate_options_format(["A. Memoization", "B) Recursion"])
-        False
+    New:
+        {"id":"A","text":"Cloud Storage"}
     """
+
     if not options or len(options) != 4:
         return False
 
+    # -------------------------
+    # New dictionary format
+    # -------------------------
+    if isinstance(options[0], dict):
+
+        expected = ["A", "B", "C", "D"]
+
+        for option, letter in zip(options, expected):
+
+            if option.get("id") != letter:
+                return False
+
+            if not option.get("text", "").strip():
+                return False
+
+        return True
+
+    # -------------------------
+    # Old string format
+    # -------------------------
     for i, opt in enumerate(options):
+
         expected = f"{OPTION_LETTERS[i]})"
+
         if not opt.startswith(expected):
             return False
-        # Ensure there's text after the prefix
+
         if len(opt) <= len(expected) + 1:
             return False
 

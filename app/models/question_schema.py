@@ -90,6 +90,7 @@ def _validate_field_type(value: Any, field_name: str) -> bool:
 
 def _validate_options(options: Any) -> bool:
     """Validate the options field."""
+
     if not isinstance(options, list):
         return False
 
@@ -97,10 +98,23 @@ def _validate_options(options: Any) -> bool:
         print(ERROR_INVALID_OPTIONS_COUNT.format(count=len(options)))
         return False
 
+    expected_letters = ["A", "B", "C", "D"]
+
     for i, opt in enumerate(options):
-        if not isinstance(opt, str):
+
+        if not isinstance(opt, dict):
             return False
-        if not opt.strip():
+
+        if "id" not in opt or "text" not in opt:
+            return False
+
+        if opt["id"] != expected_letters[i]:
+            return False
+
+        if not isinstance(opt["text"], str):
+            return False
+
+        if not opt["text"].strip():
             print(ERROR_OPTION_EMPTY.format(index=i))
             return False
 

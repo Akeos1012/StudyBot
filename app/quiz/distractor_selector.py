@@ -36,19 +36,18 @@ class DistractorSelector:
 
     def select_distractors(
         self,
-        facts: List[Dict[str, Any]],
-        target_fact: Dict[str, Any],
-        count: int = 3
-    ) -> List[str]:
-
+        facts,
+        target_fact,
+        count=3,
+    ):
         compatible = self.get_compatible_facts(
             facts,
-            target_fact
+            target_fact,
         )
 
-        random.shuffle(compatible)
-
         distractors = []
+
+        random.shuffle(compatible)
 
         for fact in compatible:
 
@@ -56,6 +55,42 @@ class DistractorSelector:
 
             if concept and concept not in distractors:
                 distractors.append(concept)
+
+            if len(distractors) == count:
+                return distractors
+
+        # -----------------------------------
+        # Fallback
+        # Same topic, regardless of type
+        # -----------------------------------
+
+        topic = target_fact.get("topic")
+
+        remaining = []
+
+        for fact in facts:
+
+            concept = fact.get("concept")
+
+            if not concept:
+                continue
+
+            if concept == target_fact.get("concept"):
+                continue
+
+            if concept in distractors:
+                continue
+
+            if fact.get("topic") != topic:
+                continue
+
+            remaining.append(concept)
+
+        random.shuffle(remaining)
+
+        for concept in remaining:
+
+            distractors.append(concept)
 
             if len(distractors) == count:
                 break

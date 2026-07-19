@@ -291,23 +291,27 @@ class QuestionScorer:
         else:
             scores.append(0.8)
 
-        # Level 1: Exact concept reference
+        # Build reusable token sets
+        correct_words = {
+            w.lower()
+            for w in correct_lower.split()
+            if len(w) > 2 and w.lower() not in STOP_WORDS
+        }
+
+        question_words = {
+            w.lower()
+            for w in question_text.split()
+            if len(w) > 2 and w.lower() not in STOP_WORDS
+        }
+
+        # Good MCQs don't need to contain the answer verbatim.
         if correct_lower in question_text:
             scores.append(1.0)
+        elif correct_words & question_words:
+            scores.append(0.9)
         else:
-            # Level 2: Word overlap
-            correct_words = set(
-                w for w in correct_lower.split() if len(w) > 3 and w not in STOP_WORDS
-            )
-            question_words = set(
-                w for w in question_text.split() if len(w) > 3 and w not in STOP_WORDS
-            )
-
-            if correct_words:
-                overlap = len(correct_words & question_words) / len(correct_words)
-                scores.append(min(overlap * 1.5, 1.0))
-            else:
-                scores.append(0.5)
+            # Neutral instead of harsh penalty.
+            scores.append(0.8)
 
         # Check: Explanation supports the answer
         explanation = question.get("explanation", "").lower()
@@ -351,6 +355,11 @@ class QuestionScorer:
         correct_text = get_correct_text_from_options(options, answer_letter)
         distractors = get_distractor_texts(options, answer_letter)
 
+        print("\n===== DISTRACTOR DEBUG =====")
+        print("Correct:", correct_text)
+        print("Distractors:", distractors)
+        print("============================")
+
         if not distractors:
             return 0.0
 
@@ -364,26 +373,44 @@ class QuestionScorer:
             return 0.4
 
         # Score each distractor
-        correct_words = set(correct_text.lower().split())
+        correct_tokens = {
+            w.lower()
+            for w in correct_text.split()
+            if len(w) > 2 and w.lower() not in STOP_WORDS
+        }
+
         distractor_scores = []
 
         for d in distractors:
-            d_words = set(d.lower().split())
+            distractor_tokens = {
+                w.lower()
+                for w in d.split()
+                if len(w) > 2 and w.lower() not in STOP_WORDS
+            }
 
-            # Overlap score: ideal overlap is 0.1-0.4
-            if correct_words:
-                overlap = len(correct_words & d_words) / max(len(correct_words), 1)
-
-                if IDEAL_OVERLAP_MIN <= overlap <= IDEAL_OVERLAP_MAX:
-                    d_score = 1.0
-                elif overlap < IDEAL_OVERLAP_MIN:
-                    d_score = 0.7  # Too different, might be too easy
-                elif overlap >= OVERLAP_TOO_SIMILAR:
-                    d_score = 0.3  # Too similar, confusing
-                else:
-                    d_score = 0.5
+            if not correct_tokens:
+                d_score = 0.7
             else:
-                d_score = 0.5
+                overlap = (
+                    len(correct_tokens & distractor_tokens)
+                    / len(correct_tokens)
+                )
+
+                # Exact duplicate
+                if overlap >= 0.95:
+                    d_score = 0.0
+
+                # Similar category (good distractor)
+                elif overlap <= 0.20:
+                    d_score = 1.0
+
+                # Some overlap
+                elif overlap <= 0.50:
+                    d_score = 0.8
+
+                # Nearly identical wording
+                else:
+                    d_score = 0.3
 
             # Length similarity
             len_diff = abs(len(correct_text) - len(d))

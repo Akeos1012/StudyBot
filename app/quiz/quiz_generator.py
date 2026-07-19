@@ -15,7 +15,7 @@ from .llm_client import LLMClient
 import traceback
 from app.config import settings
 from .distractor_selector import DistractorSelector
-from random import shuffle
+import random
 
 from app.utils.performance_profiler import profile_time
 
@@ -381,23 +381,29 @@ class QuizGenerator:
 
             question = questions[0]
 
+            question["correct"] = answer
+
             distractors = self.distractor_selector.select_distractors(
-                facts=self._supporting_facts,
-                target_fact=fact_data,
+                self._supporting_facts,
+                fact_data,
                 count=3,
             )
 
             options = distractors + [answer]
-            shuffle(options)
+            random.shuffle(options)
+
+            letters = ["A", "B", "C", "D"]
 
             question["options"] = [
-                f"{chr(65 + i)}. {text}"
-                for i, text in enumerate(options)
+                {
+                    "id": letter,
+                    "text": option
+                }
+                for letter, option in zip(letters, options)
             ]
 
-            question["correct"] = chr(
-                65 + options.index(answer)
-            )
+            question["correct"] = letters[options.index(answer)]
+
             # ===== VALIDATION PIPELINE =====
 
             # Stage 1: Structure

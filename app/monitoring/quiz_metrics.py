@@ -64,6 +64,19 @@ class QuizMetrics:
 
     llm_time: float = 0.0
 
+    llm_retry_count: int = 0
+
+    llm_call_times: list = field(
+        default_factory=list
+    )
+
+    accepted_first_try: int = 0
+
+    accepted_after_retry: int = 0
+
+    failed_after_max_retries: int = 0
+
+
 
 
     # ==========================
@@ -126,6 +139,10 @@ class QuizMetrics:
 
         self.llm_time += duration
 
+        self.llm_call_times.append(
+            round(duration, 4)
+        )
+
 
 
     def record_cpu(self, usage: float):
@@ -184,8 +201,6 @@ class QuizMetrics:
             4
         )
 
-
-
     def average(self, values):
 
         if not values:
@@ -196,7 +211,27 @@ class QuizMetrics:
             2
         )
 
+    def fastest_llm_call(self):
 
+        if not self.llm_call_times:
+            return 0
+
+        return min(self.llm_call_times)
+
+
+    def slowest_llm_call(self):
+
+        if not self.llm_call_times:
+            return 0
+
+        return max(self.llm_call_times)
+
+
+    def average_llm_call(self):
+
+        return self.average(
+            self.llm_call_times
+        )
 
     def report(self):
 

@@ -15,13 +15,11 @@ It does NOT handle:
 The module is designed to be production-ready and extensible for large vaults.
 """
 
-import os
 import json
 import hashlib
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Set
-from datetime import datetime
+from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 

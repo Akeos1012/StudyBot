@@ -76,3 +76,18 @@ LLM_MODEL = "qwen2.5:3b"
 # ==========================================================
 
 MIN_QUALITY_SCORE = 0.70
+
+
+# ==========================================================
+# GENERATION
+# ==========================================================
+
+MAX_FACTS_PER_REQUEST = 30
+SIMILARITY_THRESHOLD = 0.90
+RETRIEVAL_LIMIT = 20
+FACT_MULTIPLIER = 3
+FILL_BLANK_FACT_LIMIT = 5
+
+LLM_TEMPERATURE = 0.3
+LLM_TOP_P = 0.7
+LLM_NUM_PREDICT = 800

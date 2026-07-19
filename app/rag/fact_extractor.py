@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple, Set
-from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
 from enum import Enum
 from .fact_cleaner import clean_fact
 import logging
@@ -9,9 +9,7 @@ from collections import Counter
 
 from ..models.fact_schema import (
     create_fact,
-    is_weak_concept,
     detect_concept_type,
-    ConceptType,
 )
 
 logger = logging.getLogger(__name__)
@@ -561,7 +559,6 @@ class SemanticConceptExtractor:
 
         first_word = words[0]
         last_word = words[-1]
-        concept_clean = concept_lower.replace("_", " ").replace("-", " ")
 
         # 1. REJECT filler starts
         if first_word in self.FILLER_STARTS:

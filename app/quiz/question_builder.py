@@ -16,10 +16,9 @@ It does NOT handle:
 All facts passed to this module are assumed to be already normalized and validated.
 """
 
-import random
 import logging
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 
 from .question_explanation import build_consistent_explanation
 from .question_templates import QuestionTemplates

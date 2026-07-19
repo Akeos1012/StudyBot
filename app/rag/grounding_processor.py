@@ -20,19 +20,16 @@ This module does NOT:
 The output is a clean, validated list of grounded facts ready for quiz generation.
 """
 
-import hashlib
 import re
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Set, Tuple
-from collections import defaultdict
+from typing import List, Dict, Any, Optional
 
 from ..models.fact_schema import (
     validate_fact,
     normalize_fact,
     is_weak_concept,
     create_fact,
-    ConceptType,
 )
 
 logger = logging.getLogger(__name__)

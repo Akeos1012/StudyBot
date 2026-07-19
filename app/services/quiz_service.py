@@ -19,7 +19,6 @@ This module is NOT responsible for:
 import time
 import logging
 from typing import List, Dict, Any
-from pprint import pprint
 
 from ..rag.grounding_processor import GroundingProcessor
 from ..rag.metadata_loader import MetadataLoader

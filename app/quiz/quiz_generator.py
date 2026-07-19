@@ -9,7 +9,6 @@ from .question_cache import QuestionCache
 from .question_scorer import QuestionScorer
 from .question_similarity import is_similar_to_pool
 from .question_prompt import build_fact_question_prompt
-from .explanation_validator import validate_explanation
 from ..rag.fact_cache import FactCache
 from .llm_parser import LLMParser
 from .llm_client import LLMClient
@@ -20,7 +19,6 @@ from app.utils.performance_profiler import profile_time
 
 from .question_semantic import (
     validate_semantic,
-    has_garbled_text,
 )
 
 from .validation_logger import log_validation_failure
@@ -32,9 +30,7 @@ from .options_parser import (
 
 from .question_grounding import (
     validate_grounding,
-    normalize_supporting_fact,
     attach_grounding_fields,
-    select_supporting_fact,
     question_equals_answer,
 )
 
@@ -44,12 +40,9 @@ from .question_validator import (
     normalize_and_validate_correct_field,
     validate_question_focus,
     is_relevant_to_topic,
-    is_valid_concept,
-    is_duplicate_question,
 )
 
 from .domain_validator import validate_domain_correctness
-from ..rag.fact_cleaner import clean_text
 from ..rag.retriever import Retriever
 
 
@@ -86,8 +79,8 @@ INVALID_CONCEPT_WORDS = {
     'module'
 }
 
-MAX_FACTS_PER_REQUEST = 30
-SIMILARITY_THRESHOLD = 0.90
+MAX_FACTS_PER_REQUEST = settings.MAX_FACTS_PER_REQUEST
+SIMILARITY_THRESHOLD = settings.SIMILARITY_THRESHOLD
 
 MIN_QUALITY_SCORE = settings.MIN_QUALITY_SCORE
 DEFAULT_MAX_ATTEMPTS = settings.MAX_GENERATION_RETRIES
@@ -289,6 +282,8 @@ class QuizGenerator:
             Validated question or None
         """
         for attempt in range(max_attempts):
+            if attempt > 0:
+                self.metrics.llm_retry_count += 1
             question = self.generate_from_fact(
                 fact,
                 answer,
@@ -296,6 +291,12 @@ class QuizGenerator:
                 fact_data
             )
             if question:
+
+                if attempt == 0:
+                    self.metrics.accepted_first_try += 1
+                else:
+                    self.metrics.accepted_after_retry += 1
+
                 return question
             print(f"⚠️ Generation attempt {attempt + 1}/{max_attempts} failed")
         return None
@@ -454,7 +455,7 @@ class QuizGenerator:
                 # Continue - we already have a fallback in _attach_grounding_fields
 
             # Stage 7: Quality scoring
-            facts = self.retriever.retrieve(topic=topic, limit=20)
+            facts = self.retriever.retrieve(topic=topic, limit=settings.RETRIEVAL_LIMIT)
             is_acceptable, score, scores = self._check_quality(question, facts)
 
             if not is_acceptable:
@@ -502,7 +503,7 @@ class QuizGenerator:
         valid_questions = []
 
         # Process up to 3x requested count for filtering
-        for fact_data in supporting_facts[:count * 3]:
+        for fact_data in supporting_facts[:count * settings.FACT_MULTIPLIER]:
             if not isinstance(fact_data, dict):
                 continue
 
@@ -566,7 +567,7 @@ class QuizGenerator:
 
         valid_questions = []
 
-        for fact_data in supporting_facts[:5]:  # Try up to 5 facts
+        for fact_data in supporting_facts[:settings.FILL_BLANK_FACT_LIMIT]:  # Try up to 5 facts
             if not isinstance(fact_data, dict):
                 continue
 
@@ -583,9 +584,9 @@ class QuizGenerator:
                 start_time = time.time()
                 content = self.llm.generate(
                     prompt,
-                    temperature=0.3,
-                    top_p=0.7,
-                    num_predict=800
+                    temperature=settings.LLM_TEMPERATURE,
+                    top_p=settings.LLM_TOP_P,
+                    num_predict=settings.LLM_NUM_PREDICT
                 )
                 self._record_llm_usage(content, time.time() - start_time)
 

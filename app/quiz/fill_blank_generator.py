@@ -90,6 +90,8 @@ class FillBlankGenerator:
                         "question" in q
                         and "correct" in q
                         and "_______" in q["question"]
+                        and "A sentence where" not in q["question"]
+                        and q["question"].strip() != "Replace the answer concept with _______ in the FACT sentence."
                     ):
 
                         if q["correct"].lower() == concept.lower():
@@ -148,18 +150,19 @@ class FillBlankGenerator:
     TOPIC: {safe_topic}
 
     Requirements:
-    1. The answer MUST be "{concept}".
-    2. Create a question where the student fills in "{concept}".
-    3. Use "_______" for the blank.
-    4. The question must be based ONLY on the FACT.
+    1. The answer MUST be exactly "{concept}".
+    2. Replace the concept "{concept}" inside the sentence with "_______".
+    3. The blank must appear where the answer belongs, NOT at the end of the sentence.
+    4. The question must test understanding of the FACT only.
     5. Do not add information outside the FACT.
+    6. Make the sentence grammatically correct after removing the concept.
 
     Return ONLY valid JSON:
 
     {{
     "questions": [
         {{
-        "question": "Your question with _______ blank",
+        "question": "Replace the answer concept with _______ in the FACT sentence.",
         "correct": "{concept}",
         "explanation": ""
         }}

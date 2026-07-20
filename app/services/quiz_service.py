@@ -249,6 +249,37 @@ class QuizService:
     # PRIVATE HELPERS
     # ============================================================
 
+
+    def generate_fill_blank_questions(
+        self,
+        topic: str,
+        subtopic: str = "",
+        difficulty: str = "medium",
+        count: int = 3,
+    ):
+        """
+        Generate fill-in-the-blank questions.
+        """
+
+        notes = self._get_notes_for_topic(topic, subtopic)
+
+        if not notes:
+            return []
+
+        ranked_notes = self._rank_notes_by_content(notes)
+
+        facts = self._extract_facts_from_notes(
+            ranked_notes,
+            topic
+        )
+
+        result = self.quiz_generator.generate_fill_blank(
+            topic=topic,
+            supporting_facts=facts
+        )
+
+        return result.get("questions", [])[:count]
+
     def _get_notes_for_topic(self, topic: str, subtopic: str) -> List[Dict[str, Any]]:
         topic_aliases = {
             "cloud computing": "Cloud",

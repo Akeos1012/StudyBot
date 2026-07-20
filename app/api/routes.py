@@ -96,13 +96,11 @@ def setup_routes(quiz_service, metadata_loader, metadata):
 
         fresh = request.get("fresh", False)
 
-        questions = quiz_service.get_or_generate_questions(
+        questions = quiz_service.generate_fill_blank_questions(
             topic=topic,
             subtopic=subtopic,
             difficulty=difficulty,
             count=3,
-            fresh=fresh,
-            question_type="fillblank",
         )
 
         return {

@@ -5,6 +5,7 @@ from difflib import SequenceMatcher
 from json_repair import repair_json
 from typing import List, Dict, Any, Optional, Tuple
 
+from .fill_blank_generator import FillBlankGenerator
 from .question_explanation import build_consistent_explanation
 from .question_cache import QuestionCache
 from .question_scorer import QuestionScorer
@@ -201,6 +202,7 @@ class QuizGenerator:
     ):
         self.model = model
         self.llm = LLMClient(model=model)
+        self.fill_blank_generator = FillBlankGenerator(self.llm)
 
         # Cache of previously generated questions
         self.cache = QuestionCache()
@@ -566,13 +568,31 @@ class QuizGenerator:
             if not concept or not definition:
                 continue
 
-            # Use the proven fact-based generation pipeline
-            question = self.generate_from_fact(
-                fact=definition,
-                answer=concept,
-                topic=topic,
-                fact_data=fact_data
-            )
+            # Random question type selection
+            question_type = random.choice([
+                "multiple",
+                "fill_blank"
+            ])
+
+            if question_type == "fill_blank":
+                result = self.fill_blank_generator.generate_fill_blank(
+                    topic,
+                    [fact_data]
+                )
+
+                question = (
+                    result["questions"][0]
+                    if result.get("questions")
+                    else None
+                )
+
+            else:
+                question = self.generate_from_fact(
+                    fact=definition,
+                    answer=concept,
+                    topic=topic,
+                    fact_data=fact_data
+                )
 
             if question:
                 valid_questions.append(question)
@@ -601,101 +621,17 @@ class QuizGenerator:
         supporting_facts: list = None
     ) -> Dict[str, Any]:
         """
-        Generate grounded fill-in-the-blank questions from extracted facts.
+        Generate grounded fill-in-the-blank questions.
 
-        Args:
-            topic: The topic name
-            supporting_facts: List of extracted fact dictionaries
-
-        Returns:
-            Dictionary with 'questions' key containing list of validated questions
+        Delegates generation to FillBlankGenerator.
         """
-        self._supporting_facts = supporting_facts or []
 
-        # ===== HALLUCINATION PREVENTION =====
-        # Facts are the ONLY source of truth. No raw context is ever sent to the LLM.
-        if not supporting_facts:
-            print("⚠️ No supporting facts provided. Cannot generate grounded fill-in-the-blank questions.")
-            return {"questions": []}
+        return self.fill_blank_generator.generate_fill_blank(
+            topic,
+            supporting_facts
+        )
 
-        valid_questions = []
-
-        for fact_data in supporting_facts[:settings.FILL_BLANK_FACT_LIMIT]:  # Try up to 5 facts
-            if not isinstance(fact_data, dict):
-                continue
-
-            concept = fact_data.get("concept") or fact_data.get("answer") or ""
-            definition = fact_data.get("supporting_fact") or fact_data.get("definition") or fact_data.get("sentence") or ""
-
-            if not concept or not definition:
-                continue
-
-            # Build prompt using the extracted fact
-            prompt = self._build_fill_blank_prompt(definition, concept, topic)
-
-            try:
-                start_time = time.time()
-                content = self.llm.generate(
-                    prompt,
-                    temperature=settings.LLM_TEMPERATURE,
-                    top_p=settings.LLM_TOP_P,
-                    num_predict=settings.LLM_NUM_PREDICT
-                )
-                self._record_llm_usage(content, time.time() - start_time)
-
-                print(f"Fill-blank response received: {len(content)} characters")
-
-                json_match = re.search(r'\{[\s\S]*\}', content)
-                if not json_match:
-                    continue
-
-                content = json_match.group()
-                content = content.replace('```json', '').replace('```', '').strip()
-
-                try:
-                    repaired = repair_json(content)
-                    result = json.loads(repaired)
-                except Exception as e:
-                    print(f"⚠️ Fill-blank JSON repair failed: {e}")
-                    continue
-
-                if 'questions' not in result:
-                    continue
-
-                for q in result['questions']:
-                    if 'question' in q and 'correct' in q and '_______' in q['question']:
-                        # Validate: correct answer must match the concept
-                        if q['correct'].lower() == concept.lower():
-                            # Attach grounding fields
-                            q['supporting_fact'] = definition
-                            q['concept'] = concept
-                            q['source_note'] = fact_data.get('source_note', 'inline')
-                            q['fact_id'] = fact_data.get('fact_id', f"fillblank_{concept.lower().replace(' ', '_')}")
-                            q['_quality_score'] = 0.7  # Default quality for fill-blank
-
-                            q["explanation"] = build_consistent_explanation(
-                                concept,
-                                definition
-                            )
-
-                            valid_questions.append(q)
-                            print(f"✅ Fill-blank question generated and grounded for '{concept}'")
-                        else:
-                            print(f"⚠️ Fill-blank answer mismatch: got '{q['correct']}', expected '{concept}'")
-                            continue
-
-                if valid_questions:
-                    break
-
-            except Exception as e:
-                print(f"Error generating fill-blank: {e}")
-                continue
-
-        self._generated_questions.extend(valid_questions)
-
-        return {"questions": valid_questions}
-
-    # =========================================================================
+        # =========================================================================
     # PRIVATE HELPERS
     # =========================================================================
 

@@ -5,6 +5,7 @@ from difflib import SequenceMatcher
 from json_repair import repair_json
 from typing import List, Dict, Any, Optional, Tuple
 
+from .question_explanation import build_consistent_explanation
 from .question_cache import QuestionCache
 from .question_scorer import QuestionScorer
 from .question_similarity import is_similar_to_pool
@@ -295,7 +296,7 @@ class QuizGenerator:
                     metrics.llm_retry_count += 1
 
             self._supporting_facts = supporting_facts or []
-                    
+
             question = self.generate_from_fact(
                 fact,
                 answer,
@@ -671,6 +672,11 @@ class QuizGenerator:
                             q['source_note'] = fact_data.get('source_note', 'inline')
                             q['fact_id'] = fact_data.get('fact_id', f"fillblank_{concept.lower().replace(' ', '_')}")
                             q['_quality_score'] = 0.7  # Default quality for fill-blank
+
+                            q["explanation"] = build_consistent_explanation(
+                                concept,
+                                definition
+                            )
 
                             valid_questions.append(q)
                             print(f"✅ Fill-blank question generated and grounded for '{concept}'")

@@ -69,6 +69,9 @@ class FillBlankGenerator:
                     f"Fill blank response: {len(content)} chars"
                 )
 
+                print("RAW RESPONSE:")
+                print(content)
+
                 json_match = re.search(
                     r'\{[\s\S]*\}',
                     content
@@ -86,12 +89,18 @@ class FillBlankGenerator:
 
                 for q in result.get("questions", []):
 
+                    question_text = q["question"].strip()
+
                     if (
                         "question" in q
                         and "correct" in q
-                        and "_______" in q["question"]
-                        and "A sentence where" not in q["question"]
-                        and q["question"].strip() != "Replace the answer concept with _______ in the FACT sentence."
+                        and "_______" in question_text
+                        and "replace the answer" not in question_text.lower()
+                        and "following statement" not in question_text.lower()
+                        and "complete sentence" not in question_text.lower()
+                        and "answer removed" not in question_text.lower()
+                        and "answer replaced" not in question_text.lower()
+                        and not question_text.rstrip(".!?").endswith("_______")
                     ):
 
                         if q["correct"].lower() == concept.lower():
@@ -117,7 +126,7 @@ class FillBlankGenerator:
                                 facts=[fact_data]
                             )
 
-                            q["_quality_score"] = 0.7
+                            q["_quality_score"] = self._score_fill_blank_quality(q, concept)
 
                             valid_questions.append(q)
 
@@ -134,6 +143,28 @@ class FillBlankGenerator:
         return {
             "questions": valid_questions
         }
+
+    def _score_fill_blank_quality(self, question, concept):
+        score = 1.0
+
+        text = question.get("question", "").lower()
+
+        if "replace the answer" in text:
+            score -= 0.3
+
+        if "following statement" in text:
+            score -= 0.2
+
+        if concept.lower() in text:
+            score -= 0.3
+
+        if "_______" not in text:
+            score -= 0.5
+
+        if text.rstrip(".!?").endswith("_______"):
+            score -= 0.5
+
+        return max(score, 0)
 
     def _build_fill_blank_prompt(
         self,
@@ -162,7 +193,7 @@ class FillBlankGenerator:
     {{
     "questions": [
         {{
-        "question": "Replace the answer concept with _______ in the FACT sentence.",
+        "question": "",
         "correct": "{concept}",
         "explanation": ""
         }}

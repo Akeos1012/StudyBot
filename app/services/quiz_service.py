@@ -168,6 +168,14 @@ class QuizService:
             logger.info(f"Clearing cache for {topic}")
             cache.invalidate_topic_cache(topic, subtopic, difficulty, question_type)
 
+        if question_type == "fillblank":
+            return self.generate_fill_blank_questions(
+                topic=topic,
+                subtopic=subtopic,
+                difficulty=difficulty,
+                count=count
+            )
+
         pool = cache.get_pool(topic, subtopic, difficulty, question_type)
         print("Pool size:", len(pool))
 

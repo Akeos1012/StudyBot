@@ -22,7 +22,7 @@ GENERIC_PHRASES: Final[list[str]] = [
 # GROUNDING LIMITS
 # ==========================================
 
-MAX_SUPPORTING_WORDS: Final[int] = 24
+MAX_SUPPORTING_WORDS: Final[int] = 50
 MIN_SUPPORTING_WORDS: Final[int] = 3
 
 
@@ -31,7 +31,7 @@ MIN_SUPPORTING_WORDS: Final[int] = 3
 # ==========================================
 
 MAX_QUESTION_LENGTH: Final[int] = 250
-MAX_EXPLANATION_WORDS: Final[int] = 24
+MAX_EXPLANATION_WORDS: Final[int] = 40
 
 
 # ==========================================

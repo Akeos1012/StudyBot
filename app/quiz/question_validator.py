@@ -540,3 +540,81 @@ def is_valid_concept(concept: str) -> bool:
 
     # Default: accept if it passes all checks
     return True
+
+
+from .options_parser import get_correct_text_from_options
+
+
+def validate_question_uniqueness(question: dict) -> bool:
+    """
+    Reject questions where a distractor is described by the question.
+    """
+
+    question_text = question.get("question", "").lower()
+    options = question.get("options", [])
+    correct_letter = question.get("correct", "")
+
+    correct = get_correct_text_from_options(options, correct_letter).lower()
+
+    if not correct:
+        return False
+
+    question_words = set(_extract_meaningful_words(question_text))
+
+    for option in options:
+
+        option_text = option["text"].lower()
+
+        if option_text == correct:
+            continue
+
+        option_words = set(_extract_meaningful_words(option_text))
+
+        # Exact mention
+        if option_text in question_text:
+            log_validation_failure(
+                question,
+                "ambiguity",
+                f"Question mentions distractor '{option_text}'",
+            )
+            return False
+
+        # Word overlap
+        if option_words:
+
+            overlap = len(question_words & option_words) / len(option_words)
+
+            if overlap >= 0.8:
+                log_validation_failure(
+                    question,
+                    "ambiguity",
+                    f"Question could also describe '{option_text}'",
+                )
+                return False
+
+        # Semantic clue detection using supporting fact
+        supporting_fact = question.get("supporting_fact", "").lower()
+
+        if supporting_fact:
+
+            fact_words = set(_extract_meaningful_words(supporting_fact))
+
+            option_similarity = len(
+                fact_words & option_words
+            ) / max(len(option_words), 1)
+
+            question_similarity = len(
+                question_words & fact_words
+            ) / max(len(fact_words), 1)
+
+            # Question follows distractor definition more than answer
+            if option_similarity >= 0.5 and question_similarity >= 0.35:
+
+                log_validation_failure(
+                    question,
+                    "ambiguity",
+                    f"Question wording overlaps distractor concept '{option_text}'",
+                )
+                return False
+
+    return True

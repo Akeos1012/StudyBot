@@ -20,6 +20,7 @@ import time
 import logging
 from typing import List, Dict, Any
 
+
 from ..rag.grounding_processor import GroundingProcessor
 from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
@@ -340,14 +341,27 @@ class QuizService:
             if not fact or not answer:
                 continue
 
+            llm_start = time.perf_counter()
+
             question = self.quiz_generator.generate_with_retry(
-                fact, answer, topic, fact_data=fact_data
+                fact,
+                answer,
+                topic,
+                fact_data=fact_data,
+                supporting_facts=facts,
             )
+
+            llm_duration = time.perf_counter() - llm_start
+
+
+            metrics = get_metrics()
+
+            if metrics:
+                metrics.record_llm_call(llm_duration)
 
             if question:
                 questions.append(question)
 
-                metrics = get_metrics()
                 if metrics:
                     metrics.facts_used += 1
 

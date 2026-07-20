@@ -24,6 +24,14 @@ def normalize_supporting_fact(text: str) -> str:
     # Fix camelCase:
     # VirtualMachines -> Virtual Machines
     cleaned = re.sub(r"([a-z])([A-Z])", r"\1 \2", cleaned)
+    # Fix common merged words
+    # infixed-size -> in fixed-size
+    # dataaccess -> data access
+    # anapplication -> an application
+    cleaned = re.sub(r"(?i)\b(in)(fixed)", r"\1 \2", cleaned)
+    cleaned = re.sub(r"(?i)\b(data)(access)", r"\1 \2", cleaned)
+    cleaned = re.sub(r"(?i)\b(an)(application)", r"\1 \2", cleaned)
+    cleaned = re.sub(r"(?i)\b(remote)(servers)", r"\1 \2", cleaned)
 
     # Fix common merged words:
     # traditionalfiles -> traditional files

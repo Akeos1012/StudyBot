@@ -1,7 +1,7 @@
 import logging
 import re
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from .text_normalizer import normalize_supporting_fact
 
 from .options_parser import (
@@ -145,6 +145,83 @@ def validate_grounding(
     )
     return False
 
+def explanation_supported_by_fact(
+    explanation: str,
+    supporting_fact: str,
+    correct_text: str,
+) -> bool:
+    """
+    Returns True if the explanation is actually supported by the note-backed fact.
+    """
+
+    if not explanation or not supporting_fact:
+        return False
+
+    explanation = explanation.lower()
+    fact = supporting_fact.lower()
+    correct = correct_text.lower()
+
+    # Explanation should mention the correct concept.
+    if correct not in explanation:
+        return False
+
+    fact_words = {
+        w for w in re.findall(r"\w+", fact)
+        if len(w) > 3 and w not in STOP_WORDS
+    }
+
+    explanation_words = {
+        w for w in re.findall(r"\w+", explanation)
+        if len(w) > 3 and w not in STOP_WORDS
+    }
+
+    if not fact_words:
+        return False
+
+    overlap = len(fact_words & explanation_words) / len(fact_words)
+
+    return overlap >= 0.30
+
+def is_valid_explanation(
+    explanation: str,
+    correct_text: str,
+) -> bool:
+    """
+    Reject explanations that are just copied facts.
+    """
+
+    if not explanation:
+        return False
+
+    text = explanation.lower()
+
+    # Must mention answer
+    if correct_text.lower() not in text:
+        return False
+
+    # Reject raw fact formatting
+    banned_patterns = [
+        " refers to ",
+        " is a ",
+        " is an ",
+        " – ",
+        " - ",
+    ]
+
+    fact_like_count = sum(
+        1 for pattern in banned_patterns
+        if pattern in text
+    )
+
+    # Too many definition markers means it copied the fact
+    if fact_like_count >= 3:
+        logger.warning(
+            "Explanation looks like copied fact: %s",
+            explanation[:100],
+        )
+        return False
+
+    return True
 
 def attach_grounding_fields(
     question: Dict[str, Any], correct_text: str, supporting_fact: str, context: str = ""
@@ -190,125 +267,45 @@ def attach_grounding_fields(
             )
             return False
 
-    # Try to build a proper explanation
+
+    # Ignore LLM-generated explanations.
+    # Explanations must always be generated from supporting FACT.
+    question["explanation"] = ""
+
+    # Generate grounded explanation from FACT only.
     if correct_text and question["supporting_fact"]:
+
         explanation = build_consistent_explanation(
             question_text=question.get("question", ""),
             options=question.get("options", []),
             correct_letter=question.get("correct", ""),
             correct_text=correct_text,
             context=question["supporting_fact"],
-            facts=[{"supporting_fact": question["supporting_fact"]}],
+            facts=[
+                {
+                    "supporting_fact": question["supporting_fact"]
+                }
+            ],
         )
+
         if explanation:
             question["explanation"] = explanation
             return True
 
-    # Fallback: create a simple grounded explanation
+    # Final safe fallback.
     if correct_text and question["supporting_fact"]:
         question["explanation"] = (
-            f"{correct_text} is correct because {question['supporting_fact']}"
+            f"{correct_text} is supported by the provided fact."
         )
         return True
+
+    
     elif correct_text:
         question["explanation"] = f"{correct_text} is the correct answer."
         return True
 
     question["explanation"] = ""
     return True
-
-
-def select_supporting_fact(
-    correct_text: str,
-    supporting_facts: Optional[list] = None,
-    fallback_context: str = "",
-) -> str:
-    """Pick the strongest note-backed supporting sentence for a question."""
-
-    candidates = []
-
-    if supporting_facts:
-        for fact in supporting_facts:
-            if isinstance(fact, dict):
-                candidate = (
-                    fact.get("supporting_fact")
-                    or fact.get("sentence")
-                    or fact.get("definition")
-                    or ""
-                )
-            else:
-                candidate = str(fact)
-
-            cleaned = normalize_supporting_fact(candidate)
-
-            if cleaned:
-                candidates.append(cleaned)
-
-    if fallback_context:
-        sentences = re.split(r"[.!?\n]+", fallback_context)
-
-        for sentence in sentences:
-            cleaned = normalize_supporting_fact(sentence)
-
-            if cleaned:
-                candidates.append(cleaned)
-
-    if not candidates:
-        return ""
-
-    correct_words = {
-        w.lower()
-        for w in re.findall(r"\w+", correct_text)
-        if len(w) > 3 and w.lower() not in STOP_WORDS
-    }
-    if not correct_words:
-        return ""
-
-    best_candidate = ""
-    best_score = 0.0
-
-    for candidate in candidates:
-
-        candidate_lower = candidate.lower()
-
-        candidate_words = {
-            w.lower()
-            for w in re.findall(r"\w+", candidate_lower)
-            if len(w) > 3 and w.lower() not in STOP_WORDS
-        }
-
-        if not candidate_words:
-            continue
-
-        overlap = len(correct_words & candidate_words)
-
-        score = overlap / max(len(correct_words), 1)
-
-        if correct_text.lower() in candidate_lower:
-            score += 0.5
-
-        if score > best_score:
-            best_score = score
-            best_candidate = candidate
-
-    # Don't reject everything.
-    # Fall back to the highest scoring sentence.
-
-    if best_candidate:
-        logger.debug(
-            "Selected supporting fact | score=%.2f | answer='%s' | fact='%s'",
-            best_score,
-            correct_text,
-            best_candidate[:120],
-        )
-    else:
-        logger.debug(
-            "No supporting fact found for answer='%s'",
-            correct_text,
-        )
-
-    return best_candidate
-
 
 def question_equals_answer(question_text: str, options: list) -> bool:
     """Check if the question is just restating the correct answer."""

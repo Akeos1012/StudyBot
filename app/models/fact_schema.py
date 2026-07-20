@@ -518,7 +518,7 @@ def _extract_concept(fact: Dict[str, Any]) -> Optional[str]:
 
 
 def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
-    """Extract definition from fact using multiple possible keys."""
+    """Extract and clean definition from fact using multiple possible keys."""
     definition = (
         fact.get("definition")
         or fact.get("sentence")
@@ -526,7 +526,17 @@ def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
         or fact.get("content")
         or fact.get("text")
     )
-    return str(definition).strip() if definition else None
+
+    if not definition:
+        return None
+
+    definition = str(definition).strip()
+
+    # Repair common markdown/parser spacing issues
+    definition = re.sub(r"([a-z])([A-Z])", r"\1 \2", definition)
+    definition = re.sub(r"\s+", " ", definition)
+
+    return definition
 
 
 def _normalize_concept_type(fact: Dict[str, Any]) -> str:
@@ -552,6 +562,12 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     if not concept or not definition:
         return None
+
+
+    # Repair merged words caused by markdown preprocessing
+    definition = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", definition)
+    definition = re.sub(r"([,.!?])([A-Za-z])", r"\1 \2", definition)
+    definition = re.sub(r"\s+", " ", definition).strip()
 
     # Validate concept
     if not validate_concept_name(concept):

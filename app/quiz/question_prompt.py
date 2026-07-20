@@ -71,13 +71,13 @@ STRICT RULES:
    "Define Cloud Storage."
 
    Good:
-   "Which cloud technology allows users to store files remotely over the internet?"
+   "Which technology delivers computing resources such as storage, databases, networking, and software over the internet?"
 
    Good:
-   "Cloud Storage is primarily used for which purpose?"
+   "Cloud Computing provides users with what type of internet-based resources?"
 
    Good:
-   "Which cloud service allows users to store digital files on remote servers?"
+   "Which concept allows organizations to access computing services without relying only on local hardware?"
 
    The question may naturally mention the target concept.
    Avoid definition-style questions, not the concept name itself.
@@ -86,7 +86,21 @@ STRICT RULES:
 
    The question must clearly be about "{answer}".
 
-   The reader should know which concept is being discussed before reading the answer choices.
+   The reader should know the TARGET CONCEPT is being described before reading the answer choices.
+
+   Do not describe only one feature, capability, or sub-function of the target concept.
+
+   Example:
+
+   TARGET CONCEPT:
+   Cloud Computing
+
+   Bad:
+   "Which service allows users to store digital files on remote servers?"
+   (This describes Cloud Storage, not the complete Cloud Computing concept.)
+
+   Good:
+   "Which technology provides computing resources such as storage, databases, and software over the internet?"
 
    For abstract concepts, infrastructure terms, systems, technologies, and named concepts, ALWAYS include "{answer}" in the question text.
 
@@ -139,9 +153,10 @@ STRICT RULES:
 
 7. Explanation requirements:
 
-   - Explain why the answer is correct
-   - Reference information from the FACT
-   - Do not introduce new information
+   * Do NOT generate an explanation.
+   * Return an empty string for the explanation field.
+   * Explanation will be generated later from the supporting FACT by the grounding system.
+
 
 8. Vary the question opening.
 

@@ -59,6 +59,32 @@ def explanation_contradicts_answer(question: dict) -> bool:
 
     if not explanation:
         return False
+    
+    # Reject explanations that mention a different answer letter
+    letter_match = re.search(
+        r"\b(?:the\s+)?correct\s+answer\s+is\s+([a-d])\b",
+        explanation,
+    )
+
+    if letter_match:
+        explained_letter = letter_match.group(1).upper()
+
+        if explained_letter != correct_letter:
+            logger.warning(
+                f"Explanation says answer is {explained_letter}, "
+                f"but correct option is {correct_letter}"
+            )
+            return True
+
+    if letter_match:
+        explained_letter = letter_match.group(1)
+
+        if explained_letter != correct_letter:
+            logger.warning(
+                f"Explanation says answer is {explained_letter}, "
+                f"but correct option is {correct_letter}"
+            )
+            return True
 
     correct_text_lower = correct_text.lower()
     explanation_words = [w for w in re.split(r"[^a-z0-9]+", explanation) if len(w) > 2]

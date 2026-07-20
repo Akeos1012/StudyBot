@@ -313,24 +313,20 @@ class QuestionScorer:
             # Neutral instead of harsh penalty.
             scores.append(0.8)
 
-        # Check: Explanation supports the answer
-        explanation = question.get("explanation", "").lower()
+        from .question_grounding import explanation_supported_by_fact
+
+        explanation = question.get("explanation", "")
+        supporting_fact = question.get("supporting_fact", "")
+
         if explanation:
-            # Check if explanation mentions the correct answer
-            if correct_lower in explanation:
+            if explanation_supported_by_fact(
+                explanation,
+                supporting_fact,
+                correct_text,
+            ):
                 scores.append(1.0)
             else:
-                # Check for word overlap
-                explanation_words = set(
-                    w for w in explanation.split() if len(w) > 3 and w not in STOP_WORDS
-                )
-                if correct_words and explanation_words:
-                    overlap = len(correct_words & explanation_words) / len(
-                        correct_words
-                    )
-                    scores.append(min(overlap * 1.5, 1.0))
-                else:
-                    scores.append(0.5)
+                scores.append(0.0)
         else:
             scores.append(0.0)
 

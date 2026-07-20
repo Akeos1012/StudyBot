@@ -92,12 +92,17 @@ def build_consistent_explanation(
                         ):
                             explanation = f"{correct_text} {clean_fact}"
                         else:
-                            explanation = clean_fact
+                            explanation = (
+                                f"{correct_text} is correct because {clean_fact}"
+    )
 
                 if len(explanation.split()) > MAX_EXPLANATION_WORDS:
-                    explanation = " ".join(
-                        explanation.split()[:MAX_EXPLANATION_WORDS]
-                    ) + "."
+                    explanation = limit_explanation_length(explanation)
+
+                explanation = remove_fact_prefix(
+                    explanation,
+                    correct_text,
+                )
 
                 return clean_explanation_text(explanation)
 
@@ -105,17 +110,66 @@ def build_consistent_explanation(
         cleaned_context = normalize_supporting_fact(context)
 
         if cleaned_context:
-            explanation = cleaned_context
+            explanation = (
+                f"{correct_text} is correct because {cleaned_context}"
+)
 
             if len(explanation.split()) > MAX_EXPLANATION_WORDS:
-                explanation = " ".join(
-                    explanation.split()[:MAX_EXPLANATION_WORDS]
-                ) + "."
+                sentences = explanation.split(".")
+                explanation = sentences[0].strip() + "."
 
             return explanation
 
     return ""
 
+def remove_fact_prefix(text: str, correct_text: str) -> str:
+    """
+    Remove duplicated concept names from supporting facts.
+    """
+
+    if not text:
+        return ""
+
+    prefix = correct_text.strip()
+
+    if text.lower().startswith(prefix.lower()):
+        text = text[len(prefix):].strip()
+
+        if text.startswith("–") or text.startswith("-"):
+            text = text[1:].strip()
+
+    return text
+
+
+def limit_explanation_length(text: str, max_words: int = MAX_EXPLANATION_WORDS) -> str:
+    """
+    Trim explanation without cutting sentences in half.
+    """
+    if not text:
+        return ""
+
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+
+    result = []
+
+    for sentence in sentences:
+        if len((" ".join(result) + " " + sentence).split()) <= max_words:
+            result.append(sentence)
+        else:
+            break
+
+    if result:
+        return " ".join(result)
+
+    # fallback if first sentence is too long
+    words = text.split()[:max_words]
+
+    trimmed = " ".join(words)
+
+    if not trimmed.endswith((".", "!", "?")):
+        trimmed += "..."
+
+    return trimmed
 
 def clean_explanation_text(text: str) -> str:
     """
@@ -135,7 +189,7 @@ def clean_explanation_text(text: str) -> str:
 
     text = text.strip()
 
-    if not text.endswith("."):
+    if not text.endswith((".", "!", "?")):
         text += "."
 
     return text

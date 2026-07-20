@@ -38,7 +38,13 @@ from .question_validator import (
     validate_structure,
     normalize_and_validate_correct_field,
     validate_question_focus,
+    validate_question_uniqueness,
     is_relevant_to_topic,
+)
+
+from .validation_logger import (
+    log_validation_failure,
+    get_metrics,
 )
 
 from .domain_validator import validate_domain_correctness
@@ -267,6 +273,7 @@ class QuizGenerator:
         topic: str,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         fact_data: dict = None,
+        supporting_facts: list = None,
     ) -> Optional[dict]:
         """
         Generate a question with retries if validation fails.
@@ -283,7 +290,12 @@ class QuizGenerator:
         """
         for attempt in range(max_attempts):
             if attempt > 0:
-                self.metrics.llm_retry_count += 1
+                metrics = get_metrics()
+                if metrics:
+                    metrics.llm_retry_count += 1
+
+            self._supporting_facts = supporting_facts or []
+                    
             question = self.generate_from_fact(
                 fact,
                 answer,
@@ -293,9 +305,13 @@ class QuizGenerator:
             if question:
 
                 if attempt == 0:
-                    self.metrics.accepted_first_try += 1
+                    metrics = get_metrics()
+                    if metrics:
+                        metrics.accepted_first_try += 1
                 else:
-                    self.metrics.accepted_after_retry += 1
+                    metrics = get_metrics()
+                    if metrics:
+                        metrics.accepted_after_retry += 1
 
                 return question
             print(f"⚠️ Generation attempt {attempt + 1}/{max_attempts} failed")
@@ -363,7 +379,12 @@ class QuizGenerator:
                 content,
                 duration
             )
-            
+
+            metrics = get_metrics()
+
+            if metrics:
+                metrics.record_llm_call(duration)
+                        
             print(f"Fact-based response received: {len(content)} characters")
 
             # Parse response
@@ -383,13 +404,23 @@ class QuizGenerator:
 
             question["correct"] = answer
 
+            print("\n===== TARGET FACT =====")
+            print(fact_data)
+
             distractors = self.distractor_selector.select_distractors(
                 self._supporting_facts,
                 fact_data,
                 count=3,
             )
 
+            print("===== DISTRACTORS =====")
+            print(distractors)
+
             options = distractors + [answer]
+
+            print("===== FINAL OPTIONS =====")
+            print(options)
+
             random.shuffle(options)
 
             letters = ["A", "B", "C", "D"]
@@ -445,6 +476,9 @@ class QuizGenerator:
                 supporting_fact=sanitized_supporting_fact
             ):
                 log_validation_failure(question, "focus", f"Question doesn't focus on concept '{answer}'")
+                return None
+            # Stage 2.5: Question uniqueness
+            if not validate_question_uniqueness(question):
                 return None
 
             # Stage 3: Semantic

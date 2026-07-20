@@ -2,44 +2,181 @@
 
 All notable changes to this project are documented here.
 
-The format follows a simple version history:
+Version history uses the following categories:
 
-* Added: New features
-* Changed: Existing behavior modified
-* Fixed: Bugs resolved
-* Removed: Deprecated features removed
-* Performance: Speed or resource improvements
+* **Added** – New functionality
+* **Changed** – Existing behavior modified
+* **Fixed** – Bugs resolved
+* **Removed** – Deprecated or obsolete features
+* **Performance** – Speed and resource improvements
+* **Architecture** – Structural improvements
 
 ---
 
-# v0.6.0 - Performance Optimization (Current)
+# v0.6.0 - Performance Optimization & Grounding Refactor (Current)
 
 ## Added
 
+### Performance
+
 * Added performance monitoring foundation.
-* Added `performance_profiler.py` utility.
-* Added quiz generation timing measurement.
-* Added monitoring module for quiz metrics.
+* Added `performance_profiler.py`.
+* Added generation time measurements.
+* Added quiz metrics collection.
 * Added structured validation logging.
+
+### Grounding
+
+* Added `correct_text` field to generated questions.
+* Added `supporting_fact` attachment for every accepted question.
+* Added automatic `fact_id` generation.
+* Added `source_note` tracking.
+* Added supporting fact normalization.
+* Added supporting fact selection logic.
+* Added grounded explanation generation from extracted facts.
+* Added context fallback when supporting facts are unavailable.
+
+### Validation
+
+* Added improved grounding validation using:
+
+  * exact matching
+  * keyword overlap
+  * descriptive matching
+  * phrase-level matching
+* Added semantic explanation validation against supporting facts.
+* Added ambiguity detection improvements.
+* Added detailed validation logging.
+
+---
 
 ## Changed
 
-* Improved project organization:
+### Architecture
 
-  * Separated API layer.
-  * Separated service layer.
-  * Separated RAG pipeline.
-  * Separated quiz generation modules.
-* Improved fact cache loading process.
-* Improved question validation pipeline.
-* Improved question grounding against extracted facts.
+Project structure is now clearly separated into independent layers:
+
+* API
+* Services
+* RAG pipeline
+* Quiz generation
+* Monitoring
+* Validation
+
+### Quiz Pipeline
+
+The quiz generation pipeline has been heavily refactored.
+
+Questions now flow through:
+
+```
+Fact Cache
+      │
+      ▼
+Question Builder
+      │
+      ▼
+Grounding Layer
+      │
+      ▼
+Semantic Validation
+      │
+      ▼
+Quality Scoring
+      │
+      ▼
+Final Quiz
+```
+
+### Explanation Pipeline
+
+Explanation handling has been redesigned.
+
+Previously:
+
+```
+LLM
+   │
+   ▼
+Generated explanation
+```
+
+Current design:
+
+```
+LLM
+   │
+   ▼
+Question Builder
+   │
+   ▼
+Grounding Layer
+   │
+   ▼
+Attach supporting fact
+   │
+   ▼
+Generate fact-based explanation
+   │
+   ▼
+Semantic validation
+```
+
+This ensures every accepted explanation is grounded in the extracted knowledge base.
+
+### Grounding
+
+Grounding now relies on extracted supporting facts instead of only raw note context.
+
+Supporting facts are normalized before validation.
+
+Fact metadata now remains attached throughout the generation pipeline.
+
+---
 
 ## Fixed
 
-* Fixed invalid question generation cases.
-* Fixed duplicate question handling.
-* Fixed explanation validation issues.
-* Fixed fact normalization problems.
+### Grounding
+
+* Fixed incorrect grounding failures.
+* Fixed missing supporting facts.
+* Fixed inconsistent fact normalization.
+* Fixed incorrect context fallback behavior.
+
+### Explanations
+
+* Fixed explanation generation inconsistencies.
+* Fixed explanations that ignored extracted facts.
+* Fixed explanation attachment logic.
+* Prevented explanations from being regenerated unnecessarily once a valid explanation exists.
+* Reduced duplicate explanation generation across the pipeline.
+
+### Validation
+
+* Fixed duplicate question detection.
+* Fixed semantic validation edge cases.
+* Fixed ambiguity validation issues.
+* Fixed invalid question rejection logic.
+
+### General
+
+* Fixed fact cache normalization.
+* Fixed invalid facts remaining inside cache.
+* Fixed multiple validation edge cases discovered during refactoring.
+
+---
+
+## Performance
+
+Current optimizations include:
+
+* Faster fact normalization.
+* Reduced unnecessary explanation generation.
+* Reduced repeated grounding work.
+* Improved validation efficiency.
+* Better separation between generation and validation stages.
+
+---
 
 ## Architecture Status
 
@@ -47,43 +184,60 @@ Current pipeline:
 
 ```
 Obsidian Vault
-
-↓
-
+        │
+        ▼
 Metadata Loader
-
-↓
-
+        │
+        ▼
 Fact Extractor
-
-↓
-
+        │
+        ▼
 Fact Cache
-
-↓
-
+        │
+        ▼
 Question Builder
-
-↓
-
+        │
+        ▼
+Grounding Layer
+        │
+        ▼
 Validation Pipeline
-
-↓
-
-AI Enhancement
-
-↓
-
+        │
+        ▼
+Quality Scoring
+        │
+        ▼
+AI Enhancement (wording only)
+        │
+        ▼
 Quiz Output
 ```
 
-## Current Metrics
+---
 
-* Extracted Facts: 280
-* Topics Loaded: 15+
-* Knowledge Source: Obsidian Vault
-* LLM Role: Enhancement only
-* Ground Truth: Local fact cache
+## Current Project Status
+
+Knowledge Source
+
+* Obsidian Vault
+
+Ground Truth
+
+* Local fact cache
+
+Question Generation
+
+* Rule-based
+
+LLM Responsibility
+
+* Question wording
+* Explanation enhancement
+* Language improvement
+
+LLM does **not** create knowledge.
+
+Facts always originate from the extracted note cache.
 
 ---
 
@@ -91,16 +245,16 @@ Quiz Output
 
 ## Added
 
-* FastAPI application layer.
+* FastAPI application.
 * Quiz generation endpoint.
-* Topic retrieval endpoint.
+* Topic endpoint.
 * Cache status endpoint.
 * Note refresh endpoint.
 
 ## Changed
 
-* Connected quiz pipeline to API services.
-* Added request/response handling.
+* Connected API to service layer.
+* Standardized request and response models.
 
 ---
 
@@ -110,14 +264,21 @@ Quiz Output
 
 * Schema validation.
 * Semantic validation.
+* Grounding validation.
 * Domain validation.
 * Duplicate detection.
-* Explanation validation.
+* Ambiguity detection.
 * Quality scoring.
+* Explanation validation.
 
 ## Changed
 
-* Questions are now rejected when they are not grounded in extracted knowledge.
+Questions are rejected unless they:
+
+* follow schema,
+* are semantically correct,
+* are grounded in extracted facts,
+* pass quality scoring.
 
 ---
 
@@ -127,13 +288,14 @@ Quiz Output
 
 * Rule-based question builder.
 * Distractor generation.
-* Explanation generation.
 * Question cache.
-* Retry handling.
+* Retry mechanism.
+* AI-assisted wording improvement.
+* Fact-based explanation generation.
 
 ## Changed
 
-* AI generation changed from knowledge creation into question enhancement.
+AI transitioned from knowledge generation to enhancement only.
 
 ---
 
@@ -141,16 +303,17 @@ Quiz Output
 
 ## Added
 
-* Markdown parsing.
+* Markdown parser.
+* Metadata extraction.
 * Fact extraction.
 * Fact cleaning.
 * Fact normalization.
 * Topic organization.
-* Fact cache system.
+* Fact cache.
 
 ## Changed
 
-* Obsidian became the source of truth.
+Obsidian became the single source of truth.
 
 ---
 
@@ -159,11 +322,11 @@ Quiz Output
 ## Added
 
 * Initial project architecture.
-* FastAPI structure.
-* Modular components.
+* Modular folder structure.
 * Service layer.
-* LLM client abstraction.
-* Initial folder organization.
+* FastAPI integration.
+* LLM abstraction.
+* Initial RAG pipeline.
 
 ---
 
@@ -171,34 +334,51 @@ Quiz Output
 
 ## v0.7.0
 
-Planned:
+Planned
 
 * Centralized configuration.
+* Performance dashboard.
+* Configuration management.
 * Logging improvements.
+* Architecture cleanup.
+* Monitoring integration.
 * Version management.
-* Documentation cleanup.
+
+---
 
 ## v0.8.0
 
-Planned:
+Planned
 
-* Fill-in-the-blank engine.
-* Advanced question types.
+* Fill-in-the-blank questions.
+* True/False questions.
+* Matching questions.
+* Difficulty balancing.
+* Adaptive quiz generation.
+
+---
 
 ## v0.9.0
 
-Planned:
+Planned
 
 * Automated testing.
-* CI pipeline.
-* Quality improvements.
+* Integration testing.
+* Benchmark suite.
+* CI/CD pipeline.
+* Coverage reporting.
 
-## v1.0.0
+---
 
-Production release:
+# v1.0.0 - Production
+
+Goals
 
 * Stable architecture.
 * Optimized performance.
-* Frontend application.
 * Desktop application.
-* AI tutor features.
+* AI Study Companion.
+* Interactive tutor mode.
+* Progress tracking.
+* Learning analytics.
+* Production-ready documentation.

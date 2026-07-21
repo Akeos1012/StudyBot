@@ -16,7 +16,14 @@ from typing import List, Dict, Any, Optional, Type, Union
 # ============================================================================
 
 # ===== Schema Field Definitions =====
-REQUIRED_FIELDS = ["question", "options", "correct", "explanation"]
+REQUIRED_MC_FIELDS = ["question", "options", "correct", "explanation"]
+
+REQUIRED_MC_FIELDS = [
+    "question",
+    "options",
+    "correct",
+    "explanation"
+]
 OPTIONAL_FIELDS = [
     "_is_fallback",
     "source_notes",
@@ -131,8 +138,16 @@ def _validate_correct(correct: Any) -> bool:
 
 
 def _validate_required_fields(question: Dict[str, Any]) -> bool:
-    """Validate that all required fields are present and non-empty."""
-    for field in REQUIRED_FIELDS:
+    """Validate required fields based on question type."""
+
+    question_type = question.get("type", "mcq")
+
+    if question_type == "fill_blank":
+        required_fields = REQUIRED_FILL_BLANK_FIELDS
+    else:
+        required_fields = REQUIRED_MC_FIELDS
+
+    for field in required_fields:
         if field not in question:
             print(ERROR_MISSING_REQUIRED.format(field=field))
             return False
@@ -169,7 +184,7 @@ def _validate_optional_fields(question: Dict[str, Any]) -> bool:
 # ============================================================================
 
 QUESTION_SCHEMA = {
-    "required": REQUIRED_FIELDS,
+    "required": REQUIRED_MC_FIELDS,
     "optional": OPTIONAL_FIELDS,
     "types": FIELD_TYPES,
 }

@@ -1,6 +1,6 @@
 **AMD** – (Advanced Micro Devices) A semiconductor company that makes CPUs and GPUs for computers.
 
-**AMD CPUs often focus on:**
+## AMD CPU Features
 - High multi-core value
 - Strong performance-per-watt
 - Large cache designs (especially gaming-focused models)

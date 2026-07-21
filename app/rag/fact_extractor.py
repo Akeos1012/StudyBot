@@ -1006,8 +1006,6 @@ class FactExtractor:
             fact["fact_id"] = fact_id
             fact["source_note"] = source_note
             fact["supporting_fact"] = statement
-            fact["statement"] = statement
-            fact["answer"] = concept
             fact["weight"] = weight
 
             cleaned_fact = clean_fact(fact)

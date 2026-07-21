@@ -517,7 +517,7 @@ class GroundingProcessor:
         grounded["source_note"] = source_note
         grounded["fact_id"] = fact_id
         grounded["weight"] = DEFAULT_FACT_WEIGHT
-        grounded["answer"] = concept
+        grounded["concept"] = concept
 
         return grounded
 

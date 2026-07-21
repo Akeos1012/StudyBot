@@ -18,6 +18,7 @@ This module is NOT responsible for:
 
 import time
 import logging
+import random
 from typing import List, Dict, Any
 
 
@@ -352,18 +353,20 @@ class QuizService:
         return extracted
 
     def _generate_from_facts(
-        self, facts: List[Dict[str, Any]], topic: str, target_count: int
+        self,
+        facts: List[Dict[str, Any]],
+        topic: str,
+        target_count: int,
     ) -> List[Dict[str, Any]]:
+
         questions = []
 
+        # ---------- Multiple Choice ----------
         for fact_data in facts[:settings.MAX_FACTS_PER_NOTE]:
+
             if len(questions) >= target_count:
                 break
-            
-            # Fact debug disabled
-            # print("\n===== FACT DEBUG =====")
-            # pprint(fact_data)
-            # print("======================")
+
             fact = (
                 fact_data.get("supporting_fact")
                 or fact_data.get("definition")
@@ -371,11 +374,7 @@ class QuizService:
                 or ""
             )
 
-            answer = (
-                fact_data.get("answer")
-                or fact_data.get("concept")
-                or ""
-            )
+            answer = fact_data.get("concept", "").strip()
 
             if not fact or not answer:
                 continue
@@ -392,7 +391,6 @@ class QuizService:
 
             llm_duration = time.perf_counter() - llm_start
 
-
             metrics = get_metrics()
 
             if metrics:
@@ -404,4 +402,18 @@ class QuizService:
                 if metrics:
                     metrics.facts_used += 1
 
-        return questions
+        # ---------- Fill Blank ----------
+        fill_blank = self.quiz_generator.generate_fill_blank(
+            topic=topic,
+            supporting_facts=facts,
+        )
+
+        questions.extend(fill_blank.get("questions", []))
+        print(f"MCQ generated: {len(questions) - len(fill_blank.get('questions', []))}")
+        print(f"Fill Blank generated: {len(fill_blank.get('questions', []))}")
+        print(f"Total before shuffle: {len(questions)}")
+
+        # ---------- Shuffle ----------
+        random.shuffle(questions)
+
+        return questions[:target_count]

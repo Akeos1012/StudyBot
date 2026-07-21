@@ -10,6 +10,13 @@ from .question_explanation import build_consistent_explanation
 
 class FillBlankGenerator:
 
+    def _clean_question_text(self, text: str) -> str:
+        text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+        text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+        text = re.sub(r"(?<=[a-z])(?=[a-z]{2,}[A-Z])", " ", text)
+        text = re.sub(r"\s+", " ", text)
+        return text.strip()
+
     def __init__(self, llm):
         self.llm = llm
         self._generated_questions = []
@@ -33,11 +40,7 @@ class FillBlankGenerator:
             if not isinstance(fact_data, dict):
                 continue
 
-            concept = (
-                fact_data.get("concept")
-                or fact_data.get("answer")
-                or ""
-            )
+            concept = fact_data.get("concept", "").strip()
 
             definition = (
                 fact_data.get("supporting_fact")
@@ -89,12 +92,24 @@ class FillBlankGenerator:
 
                 for q in result.get("questions", []):
 
-                    question_text = q["question"].strip()
+                    if not isinstance(q, dict):
+                        continue
+
+                    question_text = self._clean_question_text(
+                        q.get("question", "").strip()
+                    )
+
+                    q["question"] = question_text
 
                     if (
                         "question" in q
                         and "correct" in q
                         and "_______" in question_text
+                        and question_text.count("_______") == 1
+                        and "what term fits" not in question_text.lower()
+                        and "known as" not in question_text.lower()
+                        and q["correct"].lower() == concept.lower()
+                        and concept.lower() not in question_text.lower()
                         and "replace the answer" not in question_text.lower()
                         and "following statement" not in question_text.lower()
                         and "complete sentence" not in question_text.lower()
@@ -104,6 +119,8 @@ class FillBlankGenerator:
                     ):
 
                         if q["correct"].lower() == concept.lower():
+
+                            q["type"] = "fill_blank"
 
                             q["supporting_fact"] = definition
                             q["concept"] = concept
@@ -180,13 +197,30 @@ class FillBlankGenerator:
     FACT: {definition}
     TOPIC: {safe_topic}
 
-    Requirements:
+
+Requirements:
+
     1. The answer MUST be exactly "{concept}".
-    2. Replace the concept "{concept}" inside the sentence with "_______".
-    3. The blank must appear where the answer belongs, NOT at the end of the sentence.
-    4. The question must test understanding of the FACT only.
-    5. Do not add information outside the FACT.
-    6. Make the sentence grammatically correct after removing the concept.
+
+    2. Replace ONLY the exact concept name "{concept}" with "_______".
+
+    3. The blank must represent the entire concept "{concept}", not a word inside the concept.
+
+    4. Do NOT remove or replace any other word from the FACT.
+
+    5. The blank must appear at the beginning or natural position where "{concept}" originally appears.
+
+    6. Do NOT create blanks like:
+       - "its _______"
+       - "the _______ of"
+       - "known as _______"
+       - "what term describes _______"
+
+    7. Keep the original meaning and grammar of the FACT.
+
+    8. Preserve normal spacing between every word.
+
+    9. Do not add information outside the FACT.
 
     Return ONLY valid JSON:
 

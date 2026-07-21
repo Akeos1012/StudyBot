@@ -562,7 +562,7 @@ class QuizGenerator:
             if not isinstance(fact_data, dict):
                 continue
 
-            concept = fact_data.get("concept") or fact_data.get("answer") or ""
+            concept = fact_data.get("concept", "").strip()
             definition = fact_data.get("supporting_fact") or fact_data.get("definition") or fact_data.get("sentence") or ""
 
             if not concept or not definition:

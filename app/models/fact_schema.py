@@ -506,14 +506,10 @@ def validate_fact(fact: Dict[str, Any]) -> bool:
 
 
 def _extract_concept(fact: Dict[str, Any]) -> Optional[str]:
-    """Extract concept from fact using multiple possible keys."""
-    concept = (
-        fact.get("concept")
-        or fact.get("answer")
-        or fact.get("statement")
-        or fact.get("name")
-        or fact.get("title")
-    )
+    """Extract concept from normalized fact schema."""
+
+    concept = fact.get("concept")
+
     return str(concept).strip() if concept else None
 
 

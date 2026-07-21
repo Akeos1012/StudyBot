@@ -88,7 +88,8 @@ STRICT RULES:
 
    The reader should know the TARGET CONCEPT is being described before reading the answer choices.
 
-   Do not describe only one feature, capability, or sub-function of the target concept.
+   Do not describe only a generic feature shared by many concepts.
+   Use distinctive characteristics from the FACT that separate "{answer}" from related concepts.
 
    Example:
 
@@ -102,7 +103,11 @@ STRICT RULES:
    Good:
    "Which technology provides computing resources such as storage, databases, and software over the internet?"
 
-   For abstract concepts, infrastructure terms, systems, technologies, and named concepts, ALWAYS include "{answer}" in the question text.
+   For abstract concepts, infrastructure terms, systems, technologies, and named concepts:
+
+   - Prefer including "{answer}" in the question text.
+   - If including "{answer}" creates a definition-style question, the question may describe the concept using unique characteristics from the FACT.
+   - The question must still clearly identify "{answer}" and must not describe a broader category or a different concept.
 
    Avoid writing overly generic questions that could describe many different concepts.
 

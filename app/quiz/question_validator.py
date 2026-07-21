@@ -157,7 +157,12 @@ def validate_distractors(question: dict) -> bool:
 
 def validate_structure(question: dict) -> bool:
 
-    required = ["question", "options", "correct", "explanation"]
+    is_fill_blank = "options" not in question
+
+    if is_fill_blank:
+        required = ["question", "correct", "explanation"]
+    else:
+        required = ["question", "options", "correct", "explanation"]
 
     missing = [field for field in required if field not in question]
 
@@ -167,11 +172,12 @@ def validate_structure(question: dict) -> bool:
         )
         return False
 
-    if not isinstance(question["options"], list) or len(question["options"]) != 4:
-        log_validation_failure(
-            question, "structure", "Options must contain exactly 4 items"
-        )
-        return False
+    if not is_fill_blank:
+        if not isinstance(question["options"], list) or len(question["options"]) != 4:
+            log_validation_failure(
+                question, "structure", "Options must contain exactly 4 items"
+            )
+            return False
 
     q_text = question["question"].strip()
 
@@ -551,6 +557,12 @@ def validate_question_uniqueness(question: dict) -> bool:
     """
 
     question_text = question.get("question", "").lower()
+
+    question_type = question.get("type", "mcq")
+
+    if question_type == "fill_blank":
+        return True
+
     options = question.get("options", [])
     correct_letter = question.get("correct", "")
 
@@ -571,13 +583,27 @@ def validate_question_uniqueness(question: dict) -> bool:
         option_words = set(_extract_meaningful_words(option_text))
 
         # Exact mention
+        # Ignore generic category phrases that can appear naturally
+        # Example: "cloud storage technology" when answer is "Block Storage"
+
+        generic_terms = {
+            "cloud storage",
+            "cloud computing",
+            "data storage",
+            "database",
+            "technology",
+            "system",
+        }
+
         if option_text in question_text:
-            log_validation_failure(
-                question,
-                "ambiguity",
-                f"Question mentions distractor '{option_text}'",
-            )
-            return False
+
+            if option_text not in generic_terms:
+                log_validation_failure(
+                    question,
+                    "ambiguity",
+                    f"Question mentions distractor '{option_text}'",
+                )
+                return False
 
         # Word overlap
         if option_words:

@@ -440,7 +440,7 @@ class DataCleaner:
             for f in facts:
                 if f.get("concept") == old_concept:
                     f["concept"] = new_concept
-                    f["answer"] = new_concept
+                    f["concept"] = new_concept
                     updated = True
 
             if updated:

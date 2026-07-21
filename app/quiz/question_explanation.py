@@ -34,14 +34,33 @@ def build_consistent_explanation(
     if facts:
         for fact in facts:
 
-            supporting_fact = normalize_supporting_fact(
-                str(
-                    fact.get("supporting_fact")
-                    or fact.get("sentence")
-                    or fact.get("definition")
-                    or ""
-                )
+            raw_fact = str(
+                fact.get("supporting_fact")
+                or fact.get("sentence")
+                or fact.get("definition")
+                or ""
             )
+
+            supporting_fact = normalize_supporting_fact(raw_fact)
+
+            # Remove duplicated concept prefix from explanation source
+            prefix_patterns = [
+                rf"^{re.escape(correct_text)}\s*[-–:]\s*",
+                rf"^{re.escape(correct_text)}\s+",
+            ]
+
+            for pattern in prefix_patterns:
+                supporting_fact = re.sub(
+                    pattern,
+                    "",
+                    supporting_fact,
+                    flags=re.IGNORECASE
+                ).strip()
+
+            print("\n=== EXPLANATION DEBUG ===")
+            print("Correct:", correct_text)
+            print("Fact:", supporting_fact[:200])
+            print("=========================")
 
             if not supporting_fact:
                 continue
@@ -53,11 +72,27 @@ def build_consistent_explanation(
                 word for word in re.split(r"[^a-z0-9]+", correct_lower) if len(word) > 2
             ]
 
-            supporting_words = supporting_lower.split()
+            supporting_words = [
+                word.rstrip(".,;:\"'“”()[]")
+                for word in re.split(r"\s+", supporting_lower)
+            ]
 
-            if correct_lower in supporting_lower or any(
-                word in supporting_words for word in words
+            if (
+                correct_lower in supporting_lower
+                or any(
+                    word.rstrip("s") in {
+                        w.rstrip("s")
+                        for w in supporting_words
+                    }
+                    for word in words
+                )
+                or any(
+                    word.rstrip("s") in supporting_lower
+                    for word in words
+                )
+                or len(supporting_words) >= 8
             ):
+                
                 clean_fact = supporting_fact
 
                 if clean_fact.lower().startswith(correct_text.lower()):
@@ -92,17 +127,24 @@ def build_consistent_explanation(
                         ):
                             explanation = f"{correct_text} {clean_fact}"
                         else:
-                            explanation = (
-                                f"{correct_text} is correct because {clean_fact}"
-    )
+                            if clean_fact.lower().startswith(
+                                (
+                                    "refers to ",
+                                    "is ",
+                                    "are ",
+                                    "means ",
+                                    "describes ",
+                                )
+                            ):
+                                explanation = f"{correct_text} {clean_fact}"
+
+                            else:
+                                explanation = (
+                                    f"{correct_text} is correct because {clean_fact}"
+                                )
 
                 if len(explanation.split()) > MAX_EXPLANATION_WORDS:
                     explanation = limit_explanation_length(explanation)
-
-                explanation = remove_fact_prefix(
-                    explanation,
-                    correct_text,
-                )
 
                 return clean_explanation_text(explanation)
 
@@ -124,7 +166,7 @@ def build_consistent_explanation(
 
 def remove_fact_prefix(text: str, correct_text: str) -> str:
     """
-    Remove duplicated concept names from supporting facts.
+    Remove duplicated concept names only from raw facts.
     """
 
     if not text:
@@ -133,13 +175,14 @@ def remove_fact_prefix(text: str, correct_text: str) -> str:
     prefix = correct_text.strip()
 
     if text.lower().startswith(prefix.lower()):
-        text = text[len(prefix):].strip()
+        remainder = text[len(prefix):].strip()
 
-        if text.startswith("–") or text.startswith("-"):
-            text = text[1:].strip()
+        if remainder.startswith(("–", "-")):
+            remainder = remainder[1:].strip()
+
+        return f"{prefix} {remainder}".strip()
 
     return text
-
 
 def limit_explanation_length(text: str, max_words: int = MAX_EXPLANATION_WORDS) -> str:
     """

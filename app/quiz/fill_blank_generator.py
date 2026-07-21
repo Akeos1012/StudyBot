@@ -113,9 +113,20 @@ class FillBlankGenerator:
             else:
                 print("✅ Concept replaced successfully.")
 
+            explanation = build_consistent_explanation(
+                question_text,
+                [],
+                "",
+                concept,
+                context=definition,
+                facts=[fact_data],
+            )
+
             q = {
                 "question": question_text,
                 "correct": concept,
+                "correct_text": concept,
+                "explanation": explanation,
                 "type": "fill_blank",
                 "supporting_fact": definition,
                 "concept": concept,

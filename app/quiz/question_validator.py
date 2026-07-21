@@ -574,8 +574,10 @@ def validate_question_uniqueness(question: dict) -> bool:
     question_words = set(_extract_meaningful_words(question_text))
 
     for option in options:
-
-        option_text = option["text"].lower()
+        if isinstance(option, dict):
+            option_text = option.get("text", "").lower()
+        else:
+            option_text = str(option).lower()
 
         if option_text == correct:
             continue

@@ -37,8 +37,29 @@ def normalize_supporting_fact(text: str) -> str:
     # traditionalfiles -> traditional files
     # computingenvironments -> computing environments
     cleaned = re.sub(r"(?i)(traditional)(files)", r"\1 \2", cleaned)
-
     cleaned = re.sub(r"(?i)(computing)(environments)", r"\1 \2", cleaned)
+
+    # Fix common accidental word joins from extraction
+    merged_words = {
+        "pieceofdata": "piece of data",
+        "computingand": "computing and",
+        "systemswhere": "systems where",
+        "handledby": "handled by",
+        "accessedthrough": "accessed through",
+        "storedon": "stored on",
+        "usingcloud": "using cloud",
+        "usersand": "users and",
+        "applicationsand": "applications and",
+        "independentpiece": "independent piece",
+        "managementof": "management of",
+    }
+
+    for bad, good in merged_words.items():
+        cleaned = re.sub(
+            rf"(?i)\b{bad}\b",
+            good,
+            cleaned
+        )
 
     # Remove markdown headings
     cleaned = re.sub(r"^\s*#+\s*", "", cleaned)

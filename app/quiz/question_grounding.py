@@ -272,6 +272,35 @@ def attach_grounding_fields(
     # Explanations must always be generated from supporting FACT.
     question["explanation"] = ""
 
+    # Fill blank questions use the supporting fact for explanation.
+    print("ATTACH TYPE DEBUG:", repr(question.get("type")))
+    if question.get("type") == "fill_blank":
+        print("TYPE CHECK:", repr(question.get("type")))
+        print("CORRECT TEXT:", repr(correct_text))
+        print("SUPPORTING FACT LENGTH:", len(question.get("supporting_fact", "")))
+
+        print("\n=== ATTACH DEBUG ===")
+        print("TYPE:", question.get("type"))
+        print("CORRECT:", correct_text)
+        print("FACT:", question.get("supporting_fact")[:100])
+        print("====================")
+
+        if correct_text and question["supporting_fact"]:
+            question["explanation"] = build_consistent_explanation(
+                question_text=question.get("question", ""),
+                options=question.get("options", []),
+                correct_letter=question.get("correct", ""),
+                correct_text=correct_text,
+                context=question["supporting_fact"],
+                facts=[
+                    {
+                        "supporting_fact": question["supporting_fact"]
+                    }
+                ],
+            )
+
+        return True
+    
     # Generate grounded explanation from FACT only.
     if correct_text and question["supporting_fact"]:
 

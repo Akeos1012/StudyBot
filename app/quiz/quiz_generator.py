@@ -268,7 +268,8 @@ class QuizGenerator:
     # =========================================================================
     # FACT-BASED GENERATION
     # =========================================================================
-
+    
+    
     def generate_with_retry(
         self,
         fact: str,
@@ -292,6 +293,9 @@ class QuizGenerator:
             Validated question or None
         """
         for attempt in range(max_attempts):
+
+            print(f"🔄 Generation attempt {attempt + 1}/{max_attempts}")
+
             if attempt > 0:
                 metrics = get_metrics()
                 if metrics:
@@ -429,10 +433,7 @@ class QuizGenerator:
             letters = ["A", "B", "C", "D"]
 
             question["options"] = [
-                {
-                    "id": letter,
-                    "text": option
-                }
+                f"{letter}) {option}"
                 for letter, option in zip(letters, options)
             ]
 

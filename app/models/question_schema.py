@@ -18,6 +18,14 @@ from typing import List, Dict, Any, Optional, Type, Union
 # ===== Schema Field Definitions =====
 REQUIRED_MC_FIELDS = ["question", "options", "correct", "explanation"]
 
+REQUIRED_FILL_BLANK_FIELDS = [
+    "question",
+    "correct",
+    "type",
+    "supporting_fact",
+    "concept",
+]
+
 REQUIRED_MC_FIELDS = [
     "question",
     "options",
@@ -215,15 +223,26 @@ def validate_question_schema(question: Dict[str, Any]) -> bool:
     if not _validate_optional_fields(question):
         return False
 
-    # Step 3: Validate options
-    if not _validate_options(question.get("options", [])):
-        return False
+    # Step 3: Validate based on question type
+    if question.get("type") == "fill_blank":
 
-    # Step 4: Validate correct field (will be normalized after validation)
-    if not _validate_correct(question.get("correct", "")):
-        return False
+        # Fill blank questions do not use options or A/B/C/D answers
+        if not question.get("question"):
+            return False
 
-    # Step 5: Normalize the correct field in place
-    question["correct"] = _normalize_correct(question["correct"])
+        if not question.get("correct"):
+            return False
+
+    else:
+        # MCQ validation
+        if not _validate_options(question.get("options", [])):
+            return False
+
+        if not _validate_correct(question.get("correct", "")):
+            return False
+
+    # Step 4: Normalize correct only for MCQ
+    if question.get("type") != "fill_blank":
+        question["correct"] = _normalize_correct(question["correct"])
 
     return True

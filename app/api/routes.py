@@ -7,6 +7,11 @@ Business logic is delegated to services.
 
 from fastapi import APIRouter, HTTPException
 
+from app.models.api_schema import (
+    QuizRequest,
+    FillBlankRequest,
+    QuizResponse,
+)
 
 def setup_routes(quiz_service, metadata_loader, metadata):
     router = APIRouter()
@@ -56,18 +61,15 @@ def setup_routes(quiz_service, metadata_loader, metadata):
 
         return filtered
 
-    @router.post("/quiz/generate")
-    async def generate_quiz(request: dict):
+    @router.post("/quiz/generate", response_model=QuizResponse)
+    async def generate_quiz(request: QuizRequest):
 
-        topic = request.get("topic", "Database")
+        topic = request.topic
 
-        subtopic = request.get("subtopic", "")
-
-        count = request.get("count", 3)
-
-        difficulty = request.get("difficulty", "medium")
-
-        fresh = request.get("fresh", False)
+        subtopic = request.subtopic
+        count = request.count
+        difficulty = request.difficulty
+        fresh = request.fresh
 
         questions = quiz_service.get_or_generate_questions(
             topic=topic,
@@ -85,16 +87,19 @@ def setup_routes(quiz_service, metadata_loader, metadata):
             "source_notes": ["Pool sample"],
         }
 
-    @router.post("/generate-fill-blank")
-    async def generate_fill_blank(request: dict):
+    @router.post(
+        "/generate-fill-blank",
+        response_model=QuizResponse
+    )
+    async def generate_fill_blank(request: FillBlankRequest):
 
-        topic = request.get("topic", "Database")
+        topic = request.topic or "Database"
 
-        subtopic = request.get("subtopic", "")
+        subtopic = request.subtopic or ""
 
-        difficulty = request.get("difficulty", "medium")
+        difficulty = request.difficulty or "medium"
 
-        fresh = request.get("fresh", False)
+        fresh = request.fresh
 
         questions = quiz_service.generate_fill_blank_questions(
             topic=topic,

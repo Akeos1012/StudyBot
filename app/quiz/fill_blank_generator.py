@@ -12,9 +12,21 @@ class FillBlankGenerator:
 
     def _clean_question_text(self, text: str) -> str:
         text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
-        text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
-        text = re.sub(r"(?<=[a-z])(?=[a-z]{2,}[A-Z])", " ", text)
+
+        replacements = {
+            "computingand": "computing and",
+            "organizationson-demand": "organizations on-demand",
+            "handledby": "handled by",
+            "systemswhere": "systems where",
+            "cloud-basedinfrastructure": "cloud-based infrastructure",
+            "anywhereusing": "anywhere using",
+        }
+
+        for bad, good in replacements.items():
+            text = text.replace(bad, good)
+
         text = re.sub(r"\s+", " ", text)
+
         return text.strip()
 
     def __init__(self, llm):
@@ -52,11 +64,37 @@ class FillBlankGenerator:
             if not concept or not definition:
                 continue
 
-            question_text = definition.replace(
-                concept,
-                "_______",
-                1
-            )
+            normalized_definition = definition.strip()
+
+            if normalized_definition.lower().startswith(
+                "a " + concept.lower()
+            ):
+                question_text = re.sub(
+                    r"^a\s+" + re.escape(concept),
+                    "_______",
+                    normalized_definition,
+                    count=1,
+                    flags=re.IGNORECASE
+                )
+
+            elif normalized_definition.lower().startswith(
+                concept.lower()
+            ):
+                question_text = re.sub(
+                    re.escape(concept),
+                    "_______",
+                    normalized_definition,
+                    count=1,
+                    flags=re.IGNORECASE
+                )
+
+            else:
+                question_text = f"{concept} {normalized_definition}".replace(
+                    concept,
+                    "_______",
+                    1
+                )
+
             question_text = self._clean_question_text(question_text)
 
             print("\n===== FILL BLANK DEBUG =====")
@@ -68,9 +106,6 @@ class FillBlankGenerator:
             print("============================")
 
             question_text = self._clean_question_text(question_text)
-
-            if question_text == definition:
-                continue
 
             if question_text == definition:
                 print("❌ Concept was NOT replaced.")
@@ -93,6 +128,8 @@ class FillBlankGenerator:
                     f"fillblank_{concept}"
                 ),
             }
+
+            valid_questions.append(q)
 
 
         self._generated_questions.extend(valid_questions)

@@ -595,10 +595,10 @@ class QuizGenerator:
             if question:
 
                 print("\n===== QUESTION TYPE =====")
-                print(question.get("question_type"))
+                print(question.get("type"))
                 print(question)
 
-                if question.get("question_type") != "fill_blank":
+                if question.get("type", "mcq") != "fill_blank":
 
                     if not validate_structure(question):
                         print("FAILED: structure")

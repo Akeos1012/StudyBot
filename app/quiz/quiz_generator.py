@@ -202,7 +202,7 @@ class QuizGenerator:
     ):
         self.model = model
         self.llm = LLMClient(model=model)
-        self.fill_blank_generator = FillBlankGenerator(self.llm)
+        self.fill_blank_generator = FillBlankGenerator()
 
         # Cache of previously generated questions
         self.cache = QuestionCache()
@@ -691,57 +691,6 @@ class QuizGenerator:
             topic,
             supporting_facts
         )
-
-        # =========================================================================
-    # PRIVATE HELPERS
-    # =========================================================================
-
-    def _build_fill_blank_prompt(self, definition: str, concept: str, topic: str) -> str:
-        """
-        Build a prompt for fill-in-the-blank question using the extracted fact.
-
-        Args:
-            definition: The supporting fact
-            concept: The correct answer/concept
-            topic: The topic name
-
-        Returns:
-            Prompt string for the LLM
-        """
-        safe_topic = str(topic).strip() if topic else "Unknown"
-
-        return f"""You are a computer science tutor creating a fill-in-the-blank question.
-
-CONCEPT: {concept}
-FACT: {definition}
-TOPIC: {safe_topic}
-
-Requirements:
-1. The answer MUST be "{concept}" - this is non-negotiable.
-2. Create a question where the student must fill in "{concept}" as the answer.
-3. Use "_______" for the blank space.
-4. The question must test understanding of "{concept}" based on the FACT provided.
-5. Include a short explanation that references the FACT.
-
-Example:
-FACT: "Database normalization reduces redundancy."
-CONCEPT: "redundancy"
-QUESTION: "Database normalization reduces _______."
-ANSWER: "redundancy"
-EXPLANATION: "Normalization reduces redundancy in the database."
-
-Now generate 1 fill-in-the-blank question where the answer is exactly "{concept}".
-
-Return ONLY valid JSON in this format:
-{{
-  "questions": [
-    {{
-      "question": "Your question with _______ blank",
-      "correct": "{concept}",
-      "explanation": "Your explanation referencing the fact."
-    }}
-  ]
-}}"""
 
 
 # ============================================================================

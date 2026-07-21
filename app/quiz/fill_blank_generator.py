@@ -1,15 +1,34 @@
-import json
 import re
-import time
 
-from json_repair import repair_json
-
-from .llm_parser import LLMParser
+from .fill_blank_rules import build_fill_blank_question
 from app.config import settings
 from .question_explanation import build_consistent_explanation
 
 
 class FillBlankGenerator:
+
+    def _normalize_concept(self, text: str) -> str:
+        return re.sub(
+            r"[^a-z0-9]",
+            "",
+            text.lower()
+        )
+
+    def _force_replace_concept(
+        self,
+        text: str,
+        concept: str
+    ) -> str:
+
+        pattern = re.compile(
+            re.escape(concept),
+            re.IGNORECASE
+        )
+
+        if pattern.search(text):
+            text = pattern.sub("_______", text, count=1)
+
+        return text
 
     def _clean_question_text(self, text: str) -> str:
         text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
@@ -28,11 +47,12 @@ class FillBlankGenerator:
 
         text = re.sub(r"\s+", " ", text)
 
+        # Normalize all blank styles to exactly 7 underscores
+        text = re.sub(r'_{3,}', '_______', text)
+
         return text.strip()
 
-    def __init__(self, llm):
-        self.llm = llm
-        self.parser = LLMParser()
+    def __init__(self):
         self._generated_questions = []
         self._supporting_facts = []
 
@@ -66,40 +86,52 @@ class FillBlankGenerator:
             if not concept or not definition:
                 continue
 
+            word_count = len(definition.split())
+
+            if word_count < 5 or definition.lower().strip() == concept.lower().strip():
+                print("❌ Fact too short or duplicate concept:", concept)
+                continue
+
             normalized_definition = definition.strip()
 
-            prompt = self._build_fill_blank_prompt(
-                normalized_definition,
+            question_text = build_fill_blank_question(
                 concept,
-                topic
+                normalized_definition
             )
 
-            try:
-                content = self.llm.generate(prompt)
+            question_text = self._force_replace_concept(
+                question_text,
+                concept
+            )
 
-                result = self.parser.parse(content)
+            question_text = self._clean_question_text(question_text)
 
-                if not result:
-                    print("❌ Fill blank JSON parse failed")
-                    continue
+            # Remove duplicate blanks
+            while question_text.count("_______") > 1:
+                parts = question_text.split("_______")
 
-                questions = self.parser.extract_questions(result)
-
-                if not questions:
-                    print("❌ No fill blank question returned")
-                    continue
-
-                question_text = questions[0].get(
-                    "question",
-                    ""
-                ).strip()
-
-            except Exception as e:
-                print(
-                    "❌ Fill blank generation failed:",
-                    e
+                question_text = (
+                    parts[0]
+                    + "_______"
+                    + "".join(parts[1:]).replace("_______", "")
                 )
-                continue
+
+            question_text = self._clean_question_text(question_text)
+
+            # Remove leaked concept from generated question
+            concept_pattern = re.compile(
+                re.escape(concept),
+                re.IGNORECASE
+            )
+
+            if concept_pattern.search(question_text):
+
+                print("❌ Concept leaked. Attempting repair.")
+
+                question_text = concept_pattern.sub(
+                    "_______",
+                    question_text
+                )
 
             question_text = self._clean_question_text(question_text)
 
@@ -116,8 +148,48 @@ class FillBlankGenerator:
             if question_text == definition:
                 print("❌ Concept was NOT replaced.")
                 continue
-            else:
-                print("✅ Concept replaced successfully.")
+
+
+            blank_count = question_text.count("_______")
+
+            if blank_count != 1:
+                print(f"❌ Invalid blank count: {blank_count}")
+                continue
+
+
+            if not self._validate_blank_position(question_text):
+                print("❌ Invalid blank position.")
+                continue
+
+
+            if not self._validate_blank_replacement(
+                question_text,
+                concept
+            ):
+                print("❌ Concept leaked into question.")
+                continue
+
+
+            quality = self._score_fill_blank_quality(
+                {"question": question_text},
+                concept
+            )
+
+            if not self._validate_fact_grounding(
+                question_text,
+                definition
+            ):
+                print("❌ Question not grounded in fact.")
+                continue
+
+            if quality < 0.7:
+                print(
+                    f"❌ Fill blank quality too low: {quality}"
+                )
+                continue
+
+
+            print("✅ Fill blank quality passed:", quality)
 
             explanation = build_consistent_explanation(
                 question_text,
@@ -186,17 +258,79 @@ class FillBlankGenerator:
         concept: str
     ) -> bool:
 
-        normalized = question_text.lower()
-        concept_lower = concept.lower()
+        text = question_text.lower()
 
-        # Multi-word concepts must not leave partial words behind
-        concept_words = concept_lower.split()
+        normalized_text = self._normalize_concept(text)
+        normalized_concept = self._normalize_concept(concept)
 
+        # Answer must not appear in question
+        if normalized_concept in normalized_text:
+            return False
+
+
+
+        aliases = {
+            "dombasedxss": [
+                "dombasedcrosssitescripting",
+                "domxss"
+            ]
+        }
+
+        for key, values in aliases.items():
+            if normalized_concept == key:
+                for alias in values:
+                    if alias in normalized_text:
+                        return False
+
+
+        # Detect concept variants after blank
+        concept_variants = [
+            concept.lower(),
+            concept.lower().replace(" ", "-"),
+            concept.lower().replace(" ", ""),
+        ]
+
+        for variant in concept_variants:
+            if variant in text:
+                return False
+
+        # Blank should replace the actual concept, not random words
+        before_blank = text.split("_______")[0]
+
+        concept_words = concept.lower().split()
+
+        # reject if sentence still contains parts of concept
         for word in concept_words:
-            if word in normalized:
+            if len(word) > 3 and word in before_blank:
                 return False
 
         return True
+
+    def _validate_fact_grounding(
+        self,
+        question_text: str,
+        definition: str
+    ) -> bool:
+
+        question_words = set(
+            re.findall(
+                r"\b[a-zA-Z]{4,}\b",
+                question_text.lower()
+            )
+        )
+
+        fact_words = set(
+            re.findall(
+                r"\b[a-zA-Z]{4,}\b",
+                definition.lower()
+            )
+        )
+
+        overlap = question_words.intersection(
+            fact_words
+        )
+
+        return len(overlap) >= 3
 
     def _score_fill_blank_quality(self, question, concept):
         score = 1.0
@@ -216,58 +350,10 @@ class FillBlankGenerator:
             score -= 0.5
 
         if text.rstrip(".!?").endswith("_______"):
-            score -= 0.5
+
+            # Allow natural ending blanks.
+            # Reject only extremely weak one-line questions.
+            if len(text.split()) < 6:
+                score -= 0.5
 
         return max(score, 0)
-
-    def _build_fill_blank_prompt(
-        self,
-        definition: str,
-        concept: str,
-        topic: str
-    ):
-        safe_topic = str(topic).strip() if topic else "Unknown"
-
-        return f"""You are a computer science tutor creating a fill-in-the-blank question.
-
-    CONCEPT: {concept}
-    FACT: {definition}
-    TOPIC: {safe_topic}
-
-
-Requirements:
-
-    1. The answer MUST be exactly "{concept}".
-
-    2. Create a natural fill-in-the-blank question using the FACT as the source.
-
-    3. The blank must represent the entire concept "{concept}", not a word inside the concept.
-
-    4. Keep the question fully grounded in the FACT. Do not add outside information.
-
-    5. Rewrite the sentence if needed so the blank appears in a natural position.
-
-    6. The question should test recognition of the concept, not simply remove the concept name from the original sentence.
-
-    7. Do NOT create blanks like:
-       - "its _______"
-       - "the _______ of"
-       - "known as _______"
-       - "what term describes _______"
-
-    8. Preserve the original meaning and technical accuracy.
-
-    9. Preserve normal spacing between every word.
-
-    Return ONLY valid JSON:
-
-    {{
-    "questions": [
-        {{
-        "question": "",
-        "correct": "{concept}",
-        "explanation": ""
-        }}
-    ]
-    }}
-    """

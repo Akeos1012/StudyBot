@@ -695,14 +695,34 @@ def validate_fill_blank_question(question: dict) -> bool:
         )
         return False
 
-    # Answer should not appear in question
-    if correct.lower() in text.lower():
+    # Answer should not appear inside question
+    answer_words = correct.lower().split()
+
+    question_text = text.lower()
+
+    # Allow partial words, but never allow the full concept
+    if correct.lower() in question_text:
         log_validation_failure(
             question,
             "fill_blank",
             "Answer appears inside question"
         )
         return False
+
+    # Reject when most of a multi-word answer is already exposed
+    if len(answer_words) >= 2:
+        matched_words = sum(
+            1 for word in answer_words
+            if word in question_text
+        )
+
+        if matched_words >= len(answer_words) - 1:
+            log_validation_failure(
+                question,
+                "fill_blank",
+                "Most answer words already appear in question"
+            )
+            return False
 
     # Reject weak generated patterns
     banned_patterns = [

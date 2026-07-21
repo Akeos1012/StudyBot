@@ -45,7 +45,13 @@ FIELD_NAME_MAPPING = {
 }
 
 # Expected field names in the internal schema
-INTERNAL_FIELDS = {"question", "options", "correct", "explanation"}
+INTERNAL_FIELDS = {
+    "question",
+    "options",
+    "correct",
+    "explanation",
+    "type"
+}
 
 # Markdown code fences to remove
 CODE_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*|\s*```$", flags=re.MULTILINE)
@@ -357,14 +363,21 @@ class LLMParser:
                 )
 
         # Check minimum required fields
-        if not all(field in normalized for field in ["question", "options", "correct"]):
+        if "question" not in normalized or "correct" not in normalized:
             logger.debug(f"Question missing required fields: {question.keys()}")
             return None
 
-        # Ensure options is a list
+        # Fill blank questions do not have options
+        if "options" not in normalized:
+            normalized["type"] = "fill_blank"
+            return normalized
+
+        # Multiple choice questions require options
         if not isinstance(normalized.get("options"), list):
             logger.debug("Options field is not a list")
             return None
+
+        normalized["type"] = "multiple_choice"
 
         return normalized
 

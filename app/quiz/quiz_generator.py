@@ -439,6 +439,8 @@ class QuizGenerator:
 
             question["correct"] = letters[options.index(answer)]
 
+            question["type"] = "multiple_choice"
+
             # ===== VALIDATION PIPELINE =====
 
             # Stage 1: Structure
@@ -552,7 +554,19 @@ class QuizGenerator:
         Returns:
             Dictionary with 'questions' key containing list of validated questions
         """
+
         self._supporting_facts = supporting_facts or []
+
+        cached_questions = self.cache.sample(
+            topic=topic,
+            count=count
+        )
+
+        if cached_questions:
+            print(f"📦 Cache hit ({len(cached_questions)} questions)")
+            return {"questions": cached_questions}
+
+        print("📦 Cache miss. Generating new questions...")
 
         # ===== HALLUCINATION PREVENTION =====
         # Facts are the ONLY source of truth. No raw context is ever sent to the LLM.
@@ -575,7 +589,7 @@ class QuizGenerator:
 
             fill_result = self.fill_blank_generator.generate_fill_blank(
                 topic,
-                [fact_data]
+                supporting_facts[:count]
             )
 
             question = (
@@ -646,6 +660,15 @@ class QuizGenerator:
 
         # Count only accepted questions
         self._generated_questions.extend(valid_questions)
+
+        if valid_questions:
+            self.cache.add_to_pool(
+                topic=topic,
+                subtopic="",
+                difficulty="medium",
+                qtype="multiple",
+                new_questions=valid_questions,
+            )
 
         return {"questions": valid_questions}
 

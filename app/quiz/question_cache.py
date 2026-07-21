@@ -209,7 +209,29 @@ class QuestionCache:
         existing = self.cache.get(key, [])
 
         # Filter valid questions only
-        valid_new = [q for q in new_questions if is_valid_question(q)]
+
+        for q in new_questions:
+            q.setdefault(
+                "cached_at",
+                datetime.now().isoformat()
+            )
+
+        valid_new = []
+
+        for q in new_questions:
+            valid = is_valid_question(q)
+
+            print("\nCACHE VALIDATION DEBUG")
+            print("Type:", q.get("type"))
+            print("Question:", q.get("question", "")[:80])
+            print("Valid:", valid)
+
+            if not valid:
+                print("FAILED OBJECT:")
+                print(q)
+
+            if valid:
+                valid_new.append(q)
 
         if not valid_new:
             logger.warning("No valid questions to add to pool")

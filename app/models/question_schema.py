@@ -117,21 +117,37 @@ def _validate_options(options: Any) -> bool:
 
     for i, opt in enumerate(options):
 
-        if not isinstance(opt, dict):
-            return False
+        # Support string options:
+        # "A) Answer"
+        if isinstance(opt, str):
+            if not opt.strip():
+                print(ERROR_OPTION_EMPTY.format(index=i))
+                return False
 
-        if "id" not in opt or "text" not in opt:
-            return False
+            if not opt.startswith(expected_letters[i]):
+                return False
 
-        if opt["id"] != expected_letters[i]:
-            return False
+            continue
 
-        if not isinstance(opt["text"], str):
-            return False
+        # Support dict options:
+        # {"id": "A", "text": "Answer"}
+        if isinstance(opt, dict):
+            if "id" not in opt or "text" not in opt:
+                return False
 
-        if not opt["text"].strip():
-            print(ERROR_OPTION_EMPTY.format(index=i))
-            return False
+            if opt["id"] != expected_letters[i]:
+                return False
+
+            if not isinstance(opt["text"], str):
+                return False
+
+            if not opt["text"].strip():
+                print(ERROR_OPTION_EMPTY.format(index=i))
+                return False
+
+            continue
+
+        return False
 
     return True
 

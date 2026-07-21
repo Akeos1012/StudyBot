@@ -39,14 +39,18 @@ def validate_domain_correctness(
         if domain not in text:
             continue
 
+        matched = False
+
         for keywords in rules.values():
 
-            # At least ONE supporting keyword is enough.
             if any(keyword in text for keyword in keywords):
-                return True
+                matched = True
 
-            print(f"⚠️ Domain mismatch: {domain}")
-            return False
+        if matched:
+            return True
+
+        print(f"⚠️ Domain mismatch: {domain}")
+        return False
 
     # If no specific domain rule applies,
     # don't reject the question.

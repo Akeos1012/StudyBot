@@ -4,6 +4,7 @@ import time
 
 from json_repair import repair_json
 
+from .llm_parser import LLMParser
 from app.config import settings
 from .question_explanation import build_consistent_explanation
 
@@ -31,6 +32,7 @@ class FillBlankGenerator:
 
     def __init__(self, llm):
         self.llm = llm
+        self.parser = LLMParser()
         self._generated_questions = []
         self._supporting_facts = []
 
@@ -66,34 +68,38 @@ class FillBlankGenerator:
 
             normalized_definition = definition.strip()
 
-            if normalized_definition.lower().startswith(
-                "a " + concept.lower()
-            ):
-                question_text = re.sub(
-                    r"^a\s+" + re.escape(concept),
-                    "_______",
-                    normalized_definition,
-                    count=1,
-                    flags=re.IGNORECASE
-                )
+            prompt = self._build_fill_blank_prompt(
+                normalized_definition,
+                concept,
+                topic
+            )
 
-            elif normalized_definition.lower().startswith(
-                concept.lower()
-            ):
-                question_text = re.sub(
-                    re.escape(concept),
-                    "_______",
-                    normalized_definition,
-                    count=1,
-                    flags=re.IGNORECASE
-                )
+            try:
+                content = self.llm.generate(prompt)
 
-            else:
-                question_text = f"{concept} {normalized_definition}".replace(
-                    concept,
-                    "_______",
-                    1
+                result = self.parser.parse(content)
+
+                if not result:
+                    print("❌ Fill blank JSON parse failed")
+                    continue
+
+                questions = self.parser.extract_questions(result)
+
+                if not questions:
+                    print("❌ No fill blank question returned")
+                    continue
+
+                question_text = questions[0].get(
+                    "question",
+                    ""
+                ).strip()
+
+            except Exception as e:
+                print(
+                    "❌ Fill blank generation failed:",
+                    e
                 )
+                continue
 
             question_text = self._clean_question_text(question_text)
 
@@ -233,25 +239,25 @@ Requirements:
 
     1. The answer MUST be exactly "{concept}".
 
-    2. Replace ONLY the exact concept name "{concept}" with "_______".
+    2. Create a natural fill-in-the-blank question using the FACT as the source.
 
     3. The blank must represent the entire concept "{concept}", not a word inside the concept.
 
-    4. Do NOT remove or replace any other word from the FACT.
+    4. Keep the question fully grounded in the FACT. Do not add outside information.
 
-    5. The blank must appear at the beginning or natural position where "{concept}" originally appears.
+    5. Rewrite the sentence if needed so the blank appears in a natural position.
 
-    6. Do NOT create blanks like:
+    6. The question should test recognition of the concept, not simply remove the concept name from the original sentence.
+
+    7. Do NOT create blanks like:
        - "its _______"
        - "the _______ of"
        - "known as _______"
        - "what term describes _______"
 
-    7. Keep the original meaning and grammar of the FACT.
+    8. Preserve the original meaning and technical accuracy.
 
-    8. Preserve normal spacing between every word.
-
-    9. Do not add information outside the FACT.
+    9. Preserve normal spacing between every word.
 
     Return ONLY valid JSON:
 

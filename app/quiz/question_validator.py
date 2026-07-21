@@ -55,9 +55,11 @@ def is_valid_question(question: Dict[str, Any]) -> bool:
     """
 
     if not question or not isinstance(question, dict):
+        print("FAILED: invalid dict")
         return False
 
     if not validate_question_schema(question):
+        print("FAILED: validate_question_schema")
         return False
 
     required_grounding = ["correct_text", "supporting_fact", "source_note", "fact_id"]
@@ -85,19 +87,42 @@ def is_valid_question(question: Dict[str, Any]) -> bool:
     if not explanation or len(explanation.split()) < 2:
         return False
 
-    correct_letter = question.get("correct", "")
-    options = question.get("options", [])
+    if question.get("type") == "fill_blank":
+        correct_text = question.get("correct_text") or question.get("correct")
 
-    correct_text = get_correct_text_from_options(options, correct_letter)
-
-    if not correct_text:
-        return False
-
-    for opt in options:
-        if not opt or not extract_option_text(opt):
+        if not correct_text:
             return False
 
-    return True
+        return True
+
+    else:
+        question_type = question.get("type", "mcq")
+
+        if question_type == "fill_blank":
+            correct_text = question.get("correct_text") or question.get("correct")
+
+            if not correct_text:
+                return False
+
+            return True
+
+
+        correct_letter = question.get("correct", "")
+        options = question.get("options", [])
+
+        correct_text = get_correct_text_from_options(
+            options,
+            correct_letter
+        )
+
+        if not correct_text:
+            return False
+
+        for opt in options:
+            if not opt or not extract_option_text(opt):
+                return False
+
+        return True
 
 
 def has_grounded_explanation(question: Dict[str, Any]) -> bool:
@@ -319,11 +344,11 @@ def validate_question_focus(
             overlap = len(fact_words & q_words) / len(fact_words)
 
             # Strong semantic overlap
-            if overlap >= 0.35:
+            if overlap >= 0.25:
                 return True
 
-            # Absolute overlap for long facts
-            if len(fact_words & q_words) >= 5:
+            # Absolute overlap for shorter facts
+            if len(fact_words & q_words) >= 3:
                 return True
 
 

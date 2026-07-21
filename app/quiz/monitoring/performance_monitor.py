@@ -92,6 +92,25 @@ class PerformanceMonitor:
             self.get_gpu_info()
         )
 
+        disk = psutil.disk_io_counters()
+
+        if disk:
+            performance.update({
+                "disk_read_mb": round(
+                    disk.read_bytes / 1024 / 1024,
+                    2
+                ),
+                "disk_write_mb": round(
+                    disk.write_bytes / 1024 / 1024,
+                    2
+                ),
+            })
+        else:
+            performance.update({
+                "disk_read_mb": 0,
+                "disk_write_mb": 0,
+            })
+
         return performance
 
 

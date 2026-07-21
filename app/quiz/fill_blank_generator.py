@@ -52,133 +52,48 @@ class FillBlankGenerator:
             if not concept or not definition:
                 continue
 
-            prompt = self._build_fill_blank_prompt(
-                definition,
+            question_text = definition.replace(
                 concept,
-                topic
+                "_______",
+                1
             )
+            question_text = self._clean_question_text(question_text)
 
-            try:
-                start_time = time.time()
+            print("\n===== FILL BLANK DEBUG =====")
+            print("Concept:", concept)
+            print("Original:")
+            print(definition)
+            print("Generated:")
+            print(question_text)
+            print("============================")
 
-                content = self.llm.generate(
-                    prompt,
-                    temperature=settings.LLM_TEMPERATURE,
-                    top_p=settings.LLM_TOP_P,
-                    num_predict=settings.LLM_NUM_PREDICT
-                )
+            question_text = self._clean_question_text(question_text)
 
-                print(
-                    f"Fill blank response: {len(content)} chars"
-                )
+            if question_text == definition:
+                continue
 
-                print("RAW RESPONSE:")
-                print(content)
+            if question_text == definition:
+                print("❌ Concept was NOT replaced.")
+                continue
+            else:
+                print("✅ Concept replaced successfully.")
 
-                json_match = re.search(
-                    r'\{[\s\S]*\}',
-                    content
-                )
+            q = {
+                "question": question_text,
+                "correct": concept,
+                "type": "fill_blank",
+                "supporting_fact": definition,
+                "concept": concept,
+                "source_note": fact_data.get(
+                    "source_note",
+                    "inline"
+                ),
+                "fact_id": fact_data.get(
+                    "fact_id",
+                    f"fillblank_{concept}"
+                ),
+            }
 
-                if not json_match:
-                    continue
-
-                repaired = repair_json(
-                    json_match.group()
-                )
-
-                import json
-                result = json.loads(repaired)
-
-                for q in result.get("questions", []):
-
-                    if not isinstance(q, dict):
-                        continue
-
-                    raw_question = q.get("question", "").strip()
-
-                    question_text = self._clean_question_text(
-                        raw_question
-                    )
-
-                    q["question"] = question_text
-
-
-                    concept_parts = [
-                        part.lower()
-                        for part in concept.split()
-                        if len(part) > 3
-                    ]
-
-                    remaining_concept_words = [
-                        part
-                        for part in concept_parts
-                        if part in question_text.lower()
-                    ]
-
-                    if (
-                        "question" in q
-                        and "correct" in q
-                        and "_______" in question_text
-                        and not question_text.lower().startswith(
-                            "is a "
-                        )
-                        and question_text.count("_______") == 1
-                        and self._validate_blank_replacement(
-                            question_text,
-                            concept
-                        )
-                        and self._validate_blank_position(
-                            question_text
-                        )
-                        and "what term fits" not in question_text.lower()
-                        and "known as" not in question_text.lower()
-                        and q["correct"].lower() == concept.lower()
-                        and not remaining_concept_words
-                        and "replace the answer" not in question_text.lower()
-                        and "following statement" not in question_text.lower()
-                        and "complete sentence" not in question_text.lower()
-                        and "answer removed" not in question_text.lower()
-                        and "answer replaced" not in question_text.lower()
-                        and not question_text.rstrip(".!?").endswith("_______")
-                    ):
-
-                        if q["correct"].lower() == concept.lower():
-
-                            q["type"] = "fill_blank"
-
-                            q["supporting_fact"] = definition
-                            q["concept"] = concept
-                            q["source_note"] = fact_data.get(
-                                "source_note",
-                                "inline"
-                            )
-
-                            q["fact_id"] = fact_data.get(
-                                "fact_id",
-                                f"fillblank_{concept}"
-                            )
-
-                            q["explanation"] = build_consistent_explanation(
-                                question_text=q["question"],
-                                options=[concept],
-                                correct_letter="A",
-                                correct_text=concept,
-                                context=definition,
-                                facts=[fact_data]
-                            )
-
-                            q["_quality_score"] = self._score_fill_blank_quality(q, concept)
-
-                            valid_questions.append(q)
-
-                if valid_questions:
-                    break
-
-            except Exception as e:
-                print(
-                    f"⚠️ Fill blank generation failed: {e}"
-                )
 
         self._generated_questions.extend(valid_questions)
 

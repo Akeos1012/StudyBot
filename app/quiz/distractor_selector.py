@@ -60,8 +60,45 @@ class DistractorSelector:
                 return distractors
 
         # -----------------------------------
-        # Fallback
-        # Same topic, regardless of type
+        # Fallback 1
+        # Same concept type (any topic)
+        # -----------------------------------
+
+        target_type = target_fact.get("concept_type")
+
+        remaining = []
+
+        for fact in facts:
+
+            concept = fact.get("concept")
+
+            if not concept:
+                continue
+
+            if concept == target_fact.get("concept"):
+                continue
+
+            if concept in distractors:
+                continue
+
+            if fact.get("concept_type") != target_type:
+                continue
+
+            remaining.append(concept)
+
+        random.shuffle(remaining)
+
+        for concept in remaining:
+
+            distractors.append(concept)
+
+            if len(distractors) == count:
+                return distractors
+
+
+        # -----------------------------------
+        # Fallback 2
+        # Same topic (any type)
         # -----------------------------------
 
         topic = target_fact.get("topic")
@@ -93,6 +130,38 @@ class DistractorSelector:
             distractors.append(concept)
 
             if len(distractors) == count:
-                break
+                return distractors
+
+
+        # -----------------------------------
+        # Fallback 3
+        # Any remaining concept
+        # -----------------------------------
+
+        remaining = []
+
+        for fact in facts:
+
+            concept = fact.get("concept")
+
+            if not concept:
+                continue
+
+            if concept == target_fact.get("concept"):
+                continue
+
+            if concept in distractors:
+                continue
+
+            remaining.append(concept)
+
+        random.shuffle(remaining)
+
+        for concept in remaining:
+
+            distractors.append(concept)
+
+            if len(distractors) == count:
+                return distractors
 
         return distractors

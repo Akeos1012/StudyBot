@@ -490,7 +490,11 @@ class QuizGenerator:
                 return None
 
             # Stage 4: Domain correctness
-            if not validate_domain_correctness(question):
+            if not validate_domain_correctness(
+                question,
+                answer,
+                sanitized_supporting_fact,
+            ):
                 return None
 
             # Stage 5: Correct field normalization
@@ -568,25 +572,19 @@ class QuizGenerator:
             if not concept or not definition:
                 continue
 
-            # Random question type selection
-            question_type = random.choice([
-                "multiple",
-                "fill_blank"
-            ])
+            fill_result = self.fill_blank_generator.generate_fill_blank(
+                topic,
+                [fact_data]
+            )
 
-            if question_type == "fill_blank":
-                result = self.fill_blank_generator.generate_fill_blank(
-                    topic,
-                    [fact_data]
-                )
+            question = (
+                fill_result["questions"][0]
+                if fill_result.get("questions")
+                else None
+            )
 
-                question = (
-                    result["questions"][0]
-                    if result.get("questions")
-                    else None
-                )
-
-            else:
+            # Fallback to MCQ if fill blank failed
+            if question is None:
                 question = self.generate_from_fact(
                     fact=definition,
                     answer=concept,
@@ -595,9 +593,48 @@ class QuizGenerator:
                 )
 
             if question:
-                valid_questions.append(question)
-                if len(valid_questions) >= count:
-                    break
+
+                print("\n===== QUESTION TYPE =====")
+                print(question.get("question_type"))
+                print(question)
+
+                if question.get("question_type") != "fill_blank":
+
+                    if not validate_structure(question):
+                        print("FAILED: structure")
+                        continue
+
+                    if not validate_distractors(question):
+                        print("FAILED: distractors")
+                        continue
+
+                    if not validate_semantic(question):
+                        print("FAILED: semantic")
+                        continue
+                    if not validate_domain_correctness(
+                        question,
+                        concept,
+                        definition,
+                    ):
+                        print("FAILED: domain")
+                        continue
+
+                if question:
+
+                    print("\n===== QUESTION TYPE =====")
+                    print(question.get("type"))
+                    print(question)
+
+                    valid_questions.append(question)
+
+                    print("✅ ACCEPTED")
+
+                    if len(valid_questions) >= count:
+                        break
+
+                else:
+
+                    print("❌ REJECTED")
 
         if len(valid_questions) < count:
             print(f"⚠️ Only generated {len(valid_questions)} grounded questions out of {count} requested")

@@ -15,26 +15,39 @@ DOMAIN_RULES = {
 }
 
 
-def validate_domain_correctness(question: Dict[str, Any]) -> bool:
+def validate_domain_correctness(
+    question: Dict[str, Any],
+    answer: str,
+    supporting_fact: str,
+) -> bool:
     """
-    Reject technically incorrect questions.
+    Reject only clear technical contradictions.
+    Do not reject questions simply because they omit
+    certain keywords.
     """
 
-    text = (
-        question.get("question", "") + " " + question.get("explanation", "")
+    text = " ".join(
+        [
+            question.get("question", ""),
+            answer,
+            supporting_fact,
+        ]
     ).lower()
-
+    
     for domain, rules in DOMAIN_RULES.items():
 
-        if domain in text:
+        if domain not in text:
+            continue
 
-            # check required concept alignment
-            for concept, keywords in rules.items():
+        for keywords in rules.values():
 
-                if concept in text:
+            # At least ONE supporting keyword is enough.
+            if any(keyword in text for keyword in keywords):
+                return True
 
-                    if not any(word in text for word in keywords):
-                        print(f"⚠️ Domain mismatch: {concept}")
-                        return False
+            print(f"⚠️ Domain mismatch: {domain}")
+            return False
 
+    # If no specific domain rule applies,
+    # don't reject the question.
     return True

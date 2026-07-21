@@ -95,21 +95,46 @@ class FillBlankGenerator:
                     if not isinstance(q, dict):
                         continue
 
+                    raw_question = q.get("question", "").strip()
+
                     question_text = self._clean_question_text(
-                        q.get("question", "").strip()
+                        raw_question
                     )
 
                     q["question"] = question_text
+
+
+                    concept_parts = [
+                        part.lower()
+                        for part in concept.split()
+                        if len(part) > 3
+                    ]
+
+                    remaining_concept_words = [
+                        part
+                        for part in concept_parts
+                        if part in question_text.lower()
+                    ]
 
                     if (
                         "question" in q
                         and "correct" in q
                         and "_______" in question_text
+                        and not question_text.lower().startswith(
+                            "is a "
+                        )
                         and question_text.count("_______") == 1
+                        and self._validate_blank_replacement(
+                            question_text,
+                            concept
+                        )
+                        and self._validate_blank_position(
+                            question_text
+                        )
                         and "what term fits" not in question_text.lower()
                         and "known as" not in question_text.lower()
                         and q["correct"].lower() == concept.lower()
-                        and concept.lower() not in question_text.lower()
+                        and not remaining_concept_words
                         and "replace the answer" not in question_text.lower()
                         and "following statement" not in question_text.lower()
                         and "complete sentence" not in question_text.lower()
@@ -160,6 +185,49 @@ class FillBlankGenerator:
         return {
             "questions": valid_questions
         }
+
+    def _validate_blank_position(
+        self,
+        question_text: str
+    ) -> bool:
+
+        text = question_text.strip().lower()
+
+        if not text:
+            return False
+
+        # Reject fragments where the subject was removed
+        bad_starts = [
+            "is a ",
+            "refers to ",
+            "are ",
+            "was ",
+            "means "
+        ]
+
+        for bad in bad_starts:
+            if text.startswith(bad):
+                return False
+
+        return True
+
+    def _validate_blank_replacement(
+        self,
+        question_text: str,
+        concept: str
+    ) -> bool:
+
+        normalized = question_text.lower()
+        concept_lower = concept.lower()
+
+        # Multi-word concepts must not leave partial words behind
+        concept_words = concept_lower.split()
+
+        for word in concept_words:
+            if word in normalized:
+                return False
+
+        return True
 
     def _score_fill_blank_quality(self, question, concept):
         score = 1.0

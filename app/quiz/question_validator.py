@@ -561,7 +561,7 @@ def validate_question_uniqueness(question: dict) -> bool:
     question_type = question.get("type", "mcq")
 
     if question_type == "fill_blank":
-        return True
+        return validate_fill_blank_question(question)
 
     options = question.get("options", [])
     correct_letter = question.get("correct", "")
@@ -642,5 +642,59 @@ def validate_question_uniqueness(question: dict) -> bool:
                     f"Question wording overlaps distractor concept '{option_text}'",
                 )
                 return False
+
+    return True
+
+def validate_fill_blank_question(question: dict) -> bool:
+    """
+    Validate fill blank questions.
+    """
+
+    text = question.get("question", "")
+    correct = question.get("correct", "").strip()
+
+    if not text:
+        return False
+
+    if not correct:
+        return False
+
+    # Must contain exactly one blank
+    if text.count("_______") != 1:
+        log_validation_failure(
+            question,
+            "fill_blank",
+            "Fill blank must contain exactly one blank"
+        )
+        return False
+
+    # Answer should not appear in question
+    if correct.lower() in text.lower():
+        log_validation_failure(
+            question,
+            "fill_blank",
+            "Answer appears inside question"
+        )
+        return False
+
+    # Reject weak generated patterns
+    banned_patterns = [
+        "what term describes",
+        "known as",
+        "what is this",
+        "identify the",
+        "which term"
+    ]
+
+    lower = text.lower()
+
+    for pattern in banned_patterns:
+        if pattern in lower:
+            log_validation_failure(
+                question,
+                "fill_blank",
+                f"Contains banned pattern: {pattern}"
+            )
+            return False
 
     return True

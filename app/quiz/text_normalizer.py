@@ -12,6 +12,17 @@ import re
 
 
 def normalize_supporting_fact(text: str) -> str:
+
+    text = (
+        text
+        .replace("â€“", "-")
+        .replace("â€”", "-")
+        .replace("â€™", "'")
+        .replace("â€œ", '"')
+        .replace("â€", '"')
+        .replace("â", "")
+    )
+
     """
     Turn a raw note fragment into a short atomic supporting fact.
     """
@@ -20,6 +31,13 @@ def normalize_supporting_fact(text: str) -> str:
         return ""
 
     cleaned = str(text).strip()
+
+    # Remove remaining encoding artifacts
+    cleaned = re.sub(
+        r"[\x80-\x9F]",
+        "",
+        cleaned
+    )
 
     # Fix camelCase:
     # VirtualMachines -> Virtual Machines
@@ -80,8 +98,16 @@ def normalize_supporting_fact(text: str) -> str:
     # Normalize spaces
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
+    # Remove repeated concept definition starters
+    cleaned = re.sub(
+        r"^(a|an)\s+[a-z]+(?:\s+[a-z]+)?\s+(refers to|is|are|means)\s+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE
+    )
+
     # Remove trailing punctuation
-    cleaned = cleaned.rstrip(" .")
+    cleaned = cleaned.rstrip(" .,;:")
 
     if not cleaned:
         return ""

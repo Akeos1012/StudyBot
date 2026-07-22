@@ -36,13 +36,51 @@ def build_fill_blank_question(
         flags=re.IGNORECASE
     )
 
-    # Remove concept mentions inside the definition
+    # Remove concept mentions and known aliases inside the definition
+
+    concept_aliases = [
+        concept,
+        concept.replace(" ", "-"),
+        concept.replace("-", " "),
+    ]
+
+    # Known abbreviation patterns
+    if "dom" in concept.lower() and "xss" in concept.lower():
+        concept_aliases.extend([
+            "DOM-based XSS",
+            "DOM based XSS",
+            "DOM XSS",
+            "DOM-based Cross-Site Scripting",
+            "DOM based Cross-Site Scripting",
+        ])
+
+    for alias in concept_aliases:
+        text = re.sub(
+            rf"\b{re.escape(alias)}\b",
+            "",
+            text,
+            flags=re.IGNORECASE
+        )
+
+    # Remove empty parentheses left after alias removal
     text = re.sub(
-        rf"\b{re.escape(concept)}\b",
+        r"\(\s*\)",
         "",
-        text,
-        flags=re.IGNORECASE
+        text
     )
+
+    # Remove leftover separators
+    text = re.sub(
+        r"\s*[-–:]\s*",
+        " ",
+        text
+    )
+
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    ).strip()
 
     # Clean leftover punctuation
     text = re.sub(
@@ -77,8 +115,39 @@ def build_fill_blank_question(
             flags=re.IGNORECASE
         )
 
+    # Remove remaining concept variants
+    concept_variants = [
+        concept,
+        concept.replace("-", " "),
+        concept.replace(" ", "-"),
+        concept.replace(" ", ""),
+    ]
+
+    for variant in concept_variants:
+        text = re.sub(
+            rf"\b{re.escape(variant)}\b",
+            "",
+            text,
+            flags=re.IGNORECASE
+        )
+
+    # Clean spacing after removal
+    text = re.sub(r"\s+", " ", text).strip()
+
     # Restore grammar after removing concept
     if text.startswith(("A ", "An ", "The ")):
         text = text[0].lower() + text[1:]
+
+    # Remove dangling articles before verbs
+    text = re.sub(
+        r"^(a|an|the)\s+(refers to|means|is|are)\s+",
+        r"\2 ",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    # Avoid duplicate "is"
+    if re.match(r"^(refers to|means|is|are)\b", text, re.IGNORECASE):
+        return f"_______ {text}"
 
     return f"_______ is {text}"

@@ -57,11 +57,6 @@ def build_consistent_explanation(
                     flags=re.IGNORECASE
                 ).strip()
 
-            print("\n=== EXPLANATION DEBUG ===")
-            print("Correct:", correct_text)
-            print("Fact:", supporting_fact[:200])
-            print("=========================")
-
             if not supporting_fact:
                 continue
 
@@ -139,6 +134,13 @@ def build_consistent_explanation(
                                 explanation = f"{correct_text} {clean_fact}"
 
                             else:
+                                clean_fact = re.sub(
+                                    rf"^(a|an)\s+{re.escape(correct_text.lower())}\s+(refers to|is|are|means)\s+",
+                                    "",
+                                    clean_fact,
+                                    flags=re.IGNORECASE
+                                )
+
                                 explanation = (
                                     f"{correct_text} is correct because {clean_fact}"
                                 )
@@ -213,7 +215,6 @@ def limit_explanation_length(text: str, max_words: int = MAX_EXPLANATION_WORDS) 
         trimmed += "..."
 
     return trimmed
-
 def clean_explanation_text(text: str) -> str:
     """
     Final cleanup for generated explanations.
@@ -222,15 +223,41 @@ def clean_explanation_text(text: str) -> str:
     if not text:
         return ""
 
+    replacements = {
+        "hosted,managed": "hosted, managed",
+        "infrastructureover": "infrastructure over",
+        "accessedthrough": "accessed through",
+        "computingservices": "computing services",
+        "cloudcomputing": "cloud computing",
+        "databaseoperations": "database operations",
+        "storedon": "stored on",
+        "remoteservers": "remote servers",
+        "cloud-based": "cloud-based",
+    }
+
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+
     text = re.sub(
-        r"(\w)(storesdata|create|provide)", r"\1 \2", text, flags=re.IGNORECASE
+        r"(\w)(storesdata|create|provide)",
+        r"\1 \2",
+        text,
+        flags=re.IGNORECASE
     )
 
     text = re.sub(r"\s+", " ", text)
 
-    text = re.sub(r"(\b[A-Za-z ]+)\s+\1\b", r"\1", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"(\b[A-Za-z ]+)\s+\1\b",
+        r"\1",
+        text,
+        flags=re.IGNORECASE
+    )
 
     text = text.strip()
+
+    # Fix punctuation before period
+    text = re.sub(r"\s*,\s*\.", ".", text)
 
     if not text.endswith((".", "!", "?")):
         text += "."

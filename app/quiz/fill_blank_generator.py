@@ -1,8 +1,10 @@
 import re
+import logging
 
 from .fill_blank_rules import build_fill_blank_question
 from app.config import settings
 from .question_explanation import build_consistent_explanation
+logger = logging.getLogger(__name__)
 
 
 class FillBlankGenerator:
@@ -64,7 +66,7 @@ class FillBlankGenerator:
         self._supporting_facts = supporting_facts or []
 
         if not supporting_facts:
-            print("⚠️ No supporting facts provided.")
+            logger.warning("No supporting facts provided.")
             return {"questions": []}
 
         valid_questions = []
@@ -89,7 +91,10 @@ class FillBlankGenerator:
             word_count = len(definition.split())
 
             if word_count < 5 or definition.lower().strip() == concept.lower().strip():
-                print("❌ Fact too short or duplicate concept:", concept)
+                logger.warning(
+                    "Fact too short or duplicate concept: %s",
+                    concept
+                )
                 continue
 
             normalized_definition = definition.strip()
@@ -126,7 +131,7 @@ class FillBlankGenerator:
 
             if concept_pattern.search(question_text):
 
-                print("❌ Concept leaked. Attempting repair.")
+                logger.warning("Concept leaked. Attempting repair.")
 
                 question_text = concept_pattern.sub(
                     "_______",
@@ -135,30 +140,25 @@ class FillBlankGenerator:
 
             question_text = self._clean_question_text(question_text)
 
-            print("\n===== FILL BLANK DEBUG =====")
-            print("Concept:", concept)
-            print("Original:")
-            print(definition)
-            print("Generated:")
-            print(question_text)
-            print("============================")
-
             question_text = self._clean_question_text(question_text)
 
             if question_text == definition:
-                print("❌ Concept was NOT replaced.")
+                logger.warning("Concept was NOT replaced.")
                 continue
 
 
             blank_count = question_text.count("_______")
 
             if blank_count != 1:
-                print(f"❌ Invalid blank count: {blank_count}")
+                logger.warning(
+                    "Invalid blank count: %s",
+                    blank_count
+                )
                 continue
 
 
             if not self._validate_blank_position(question_text):
-                print("❌ Invalid blank position.")
+                logger.warning("Invalid blank position.")
                 continue
 
 
@@ -166,7 +166,7 @@ class FillBlankGenerator:
                 question_text,
                 concept
             ):
-                print("❌ Concept leaked into question.")
+                logger.warning("Concept leaked into question.")
                 continue
 
 
@@ -179,17 +179,21 @@ class FillBlankGenerator:
                 question_text,
                 definition
             ):
-                print("❌ Question not grounded in fact.")
+                logger.warning("Question not grounded in fact.")
                 continue
 
             if quality < 0.7:
-                print(
-                    f"❌ Fill blank quality too low: {quality}"
+                logger.warning(
+                    "Fill blank quality too low: %.2f",
+                    quality
                 )
                 continue
 
 
-            print("✅ Fill blank quality passed:", quality)
+            logger.info(
+                "Fill blank quality passed: %.2f",
+                quality
+            )
 
             explanation = build_consistent_explanation(
                 question_text,

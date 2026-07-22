@@ -139,6 +139,13 @@ class QuizService:
             metrics.questions_generated - metrics.questions_accepted,
         )
 
+        for q in questions:
+            q["topic"] = topic
+            q["subtopic"] = subtopic
+            q["question_id"] = str(hash(q.get("question", "")))
+
+        for q in questions:
+            q["difficulty"] = difficulty
         return questions[:count]
 
     def get_or_generate_questions(
@@ -154,14 +161,16 @@ class QuizService:
         Retrieve questions from cache or generate new ones.
         """
         start_time = time.time()
-        print("\n========== QUIZ SERVICE ==========")
-        print("Entered get_or_generate_questions()")
+
+        logger.info(
+            "Generating quiz | topic=%s fresh=%s count=%s",
+            topic,
+            fresh,
+            count
+        )
+
         performance_monitor = PerformanceMonitor()
         performance_monitor.start()
-        print("Topic:", topic)
-        print("Fresh:", fresh)
-        print("Count:", count)
-        print("==================================")
 
         cache = self.quiz_generator.cache
 
@@ -178,10 +187,10 @@ class QuizService:
             )
 
         pool = cache.get_pool(topic, subtopic, difficulty, question_type)
-        print("Pool size:", len(pool))
+        logger.info("Pool size: %s", len(pool))
 
-        if len(pool) < settings.MIN_POOL_SIZE:
-            print("Generating new questions...")
+        if len(pool) < count:
+            logger.info("Generating new questions...")
             metrics = get_metrics()
             logger.info(f"Pool size {len(pool)} is below minimum. Generating more.")
 
@@ -244,16 +253,20 @@ class QuizService:
                 performance_data["gpu_temperature_c"]
             )
 
-            print("\n========== QUIZ METRICS ==========")
-            print(metrics.report())
+            logger.info("Quiz metrics: %s", metrics.report())
 
         logger.info(
             "Quiz generation completed in %.2fs",
             time.time() - start_time
         )
 
-        return result
+        for q in result:
+            q["topic"] = topic
+            q["subtopic"] = subtopic
+            q["question_id"] = str(hash(q.get("question", "")))
 
+        return result
+    
     # ============================================================
     # PRIVATE HELPERS
     # ============================================================
@@ -281,6 +294,8 @@ class QuizService:
             ranked_notes,
             topic
         )
+
+
 
         result = self.quiz_generator.generate_fill_blank(
             topic=topic,
@@ -409,9 +424,12 @@ class QuizService:
         )
 
         questions.extend(fill_blank.get("questions", []))
-        print(f"MCQ generated: {len(questions) - len(fill_blank.get('questions', []))}")
-        print(f"Fill Blank generated: {len(fill_blank.get('questions', []))}")
-        print(f"Total before shuffle: {len(questions)}")
+        logger.info(
+            "MCQ generated: %s | Fill Blank generated: %s | Total before shuffle: %s",
+            len(questions) - len(fill_blank.get("questions", [])),
+            len(fill_blank.get("questions", [])),
+            len(questions),
+        )
 
         # ---------- Shuffle ----------
         random.shuffle(questions)

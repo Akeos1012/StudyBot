@@ -477,8 +477,11 @@ class MetadataLoader:
             # Get topic from frontmatter or parent directory
             topic = frontmatter.get("topic", md_file.parent.name)
 
-            # Get subtopic from frontmatter
+            # Get subtopic from frontmatter or filename
             subtopic = frontmatter.get("subtopic", "")
+
+            if not subtopic:
+                subtopic = md_file.stem
 
             # Get content length without loading full file
             full_content = self._read_note_content(str(md_file))

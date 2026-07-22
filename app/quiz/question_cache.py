@@ -221,14 +221,11 @@ class QuestionCache:
         for q in new_questions:
             valid = is_valid_question(q)
 
-            print("\nCACHE VALIDATION DEBUG")
-            print("Type:", q.get("type"))
-            print("Question:", q.get("question", "")[:80])
-            print("Valid:", valid)
-
             if not valid:
-                print("FAILED OBJECT:")
-                print(q)
+                logger.warning(
+                    "Rejected invalid cached question: %s",
+                    q.get("question", "")[:80]
+                )
 
             if valid:
                 valid_new.append(q)
@@ -259,6 +256,8 @@ class QuestionCache:
         logger.info(
             f"Added {len(unique_questions)} new questions to pool for {topic} (pool size: {len(existing)})"
         )
+
+        return len(unique_questions)
 
     def sample(
         self,

@@ -4,6 +4,35 @@ import random
 
 class DistractorSelector:
 
+
+    def _is_related_concept(
+        self,
+        concept: str,
+        target_concept: str
+    ) -> bool:
+        """
+        Reject distractors that are too closely related
+        to the correct answer.
+        """
+
+        a = concept.lower()
+        b = target_concept.lower()
+
+        # exact match
+        if a == b:
+            return True
+
+        # shared important words
+        a_words = set(a.replace("-", " ").split())
+        b_words = set(b.replace("-", " ").split())
+
+        common = a_words & b_words
+
+        if common:
+            return True
+
+        return False
+
     def get_compatible_facts(
         self,
         facts: List[Dict[str, Any]],
@@ -21,10 +50,13 @@ class DistractorSelector:
             if not concept:
                 continue
 
-            # remove same answer
-            if concept == target_concept:
+            # remove same or related answer
+            if self._is_related_concept(
+                concept,
+                target_concept
+            ):
                 continue
-
+            
             # same ontology type only
             if fact.get("concept_type") != target_type:
                 continue

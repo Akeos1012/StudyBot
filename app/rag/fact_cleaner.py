@@ -71,6 +71,18 @@ def clean_text(text: str) -> str:
     # Add spaces between camelCase words (e.g., "cloudStorage" -> "cloud Storage")
     text = re.sub(CAMEL_CASE_PATTERN, r"\1 \2", text)
 
+        # Fix common missing word boundaries
+    WORD_BOUNDARY_FIXES = {
+        "serverswithout": "servers without",
+        "remoteservers": "remote servers",
+        "accessedover": "accessed over",
+        "savingfiles": "saving files",
+        "cloudstorage": "cloud storage",
+    }
+
+    for bad, good in WORD_BOUNDARY_FIXES.items():
+        text = text.replace(bad, good)
+
     return text.strip()
 
 
@@ -164,7 +176,10 @@ def clean_fact(fact: Dict[str, Any]) -> Dict[str, Any]:
         cleaned["sentence"] = clean_text(cleaned["sentence"])
 
     if "supporting_fact" in cleaned:
-        cleaned["supporting_fact"] = clean_text(cleaned["supporting_fact"])
+        cleaned["supporting_fact"] = clean_definition(
+            concept,
+            cleaned["supporting_fact"]
+        )
 
     return cleaned
 

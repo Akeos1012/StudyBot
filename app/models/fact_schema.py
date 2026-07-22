@@ -35,6 +35,7 @@ class ConceptType(Enum):
     LANGUAGE = "language"
     PARADIGM = "paradigm"
     APPLICATION = "application"
+    SECURITY = "security"
 
     TECHNOLOGY = "technology"
     HARDWARE = "hardware"
@@ -165,6 +166,21 @@ INVALID_CONCEPT_PATTERNS = [
 
 # ===== Concept Type Keywords =====
 CONCEPT_TYPE_KEYWORDS = {
+
+    ConceptType.SECURITY: [
+        "security",
+        "authentication",
+        "authorization",
+        "vulnerability",
+        "attack",
+        "xss",
+        "csrf",
+        "encryption",
+        "firewall",
+        "token",
+        "malware",
+    ],
+
     ConceptType.ALGORITHM: [
         "sort",
         "search",
@@ -528,6 +544,16 @@ def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
 
     definition = str(definition).strip()
 
+    # Fix encoding corruption from markdown extraction
+    definition = (
+        definition
+        .replace("â€“", "-")
+        .replace("â€”", "-")
+        .replace("â€™", "'")
+        .replace("â€œ", '"')
+        .replace("â€", '"')
+    )
+
     # Repair common markdown/parser spacing issues
     definition = re.sub(r"([a-z])([A-Z])", r"\1 \2", definition)
     definition = re.sub(r"\s+", " ", definition)
@@ -561,6 +587,17 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
     # Repair merged words caused by markdown preprocessing
+
+    # Repair encoding corruption
+    definition = (
+        definition
+        .replace("â€“", "-")
+        .replace("â€”", "-")
+        .replace("â€™", "'")
+        .replace("â€œ", '"')
+        .replace("â€", '"')
+    )
+
     definition = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", definition)
     definition = re.sub(r"([,.!?])([A-Za-z])", r"\1 \2", definition)
     definition = re.sub(r"\s+", " ", definition).strip()
@@ -643,6 +680,11 @@ def detect_concept_type(concept: str, definition: str = "") -> str:
 
     # Exact known concepts
     exact_overrides = {
+        "application security": ConceptType.SECURITY.value,
+        "csrf token": ConceptType.SECURITY.value,
+        "dom based xss": ConceptType.SECURITY.value,
+        "authentication": ConceptType.SECURITY.value,
+        "authorization": ConceptType.SECURITY.value,
         "containerization": ConceptType.TECHNOLOGY.value,
         "cloud storage": ConceptType.TECHNOLOGY.value,
         "cloud computing": ConceptType.TECHNOLOGY.value,

@@ -64,28 +64,54 @@ def setup_routes(quiz_service, metadata_loader, metadata):
     @router.post("/quiz/generate", response_model=QuizResponse)
     async def generate_quiz(request: QuizRequest):
 
-        topic = request.topic
+        try:
+            topic = request.topic
 
-        subtopic = request.subtopic
-        count = request.count
-        difficulty = request.difficulty
-        fresh = request.fresh
+            subtopic = request.subtopic
+            count = request.count
+            difficulty = request.difficulty
+            fresh = request.fresh
 
-        questions = quiz_service.get_or_generate_questions(
-            topic=topic,
-            subtopic=subtopic,
-            difficulty=difficulty,
-            count=count,
-            fresh=fresh,
-            question_type="multiple",
-        )
+            questions = quiz_service.get_or_generate_questions(
+                topic=topic,
+                subtopic=subtopic,
+                difficulty=difficulty,
+                count=count,
+                fresh=fresh,
+                question_type="multiple",
+            )
 
-        return {
-            "topic": topic,
-            "subtopic": subtopic if subtopic else None,
-            "questions": questions,
-            "source_notes": ["Pool sample"],
-        }
+            if not questions:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No questions found for topic: {topic}"
+                )
+
+            return {
+                "success": True,
+                "topic": topic,
+                "subtopic": subtopic if subtopic else None,
+                "difficulty": difficulty,
+                "question_type": "multiple",
+                "count": len(questions),
+                "questions": questions,
+                "source_notes": sorted(
+                    {
+                        q.get("source_note")
+                        for q in questions
+                        if q.get("source_note")
+                    }
+                )
+            }
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Quiz generation failed: {str(e)}"
+            )
 
     @router.post(
         "/generate-fill-blank",
@@ -108,11 +134,27 @@ def setup_routes(quiz_service, metadata_loader, metadata):
             count=3,
         )
 
+        if not questions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No fill blank questions found for topic: {topic}"
+            )
+
         return {
+            "success": True,
             "topic": topic,
             "subtopic": subtopic if subtopic else None,
+            "difficulty": difficulty,
+            "question_type": "fill_blank",
+            "count": len(questions),
             "questions": questions,
-            "source_notes": ["Pool sample"],
+            "source_notes": list(
+                set(
+                    q.get("source_note")
+                    for q in questions
+                    if q.get("source_note")
+                )
+            ),
         }
 
     @router.post("/refresh-notes")

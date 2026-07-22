@@ -411,23 +411,13 @@ class QuizGenerator:
 
             question["correct"] = answer
 
-            print("\n===== TARGET FACT =====")
-            print(fact_data)
-
             distractors = self.distractor_selector.select_distractors(
                 self._supporting_facts,
                 fact_data,
                 count=3,
             )
 
-            print("===== DISTRACTORS =====")
-            print(distractors)
-
             options = distractors + [answer]
-
-            print("===== FINAL OPTIONS =====")
-            print(options)
-
             random.shuffle(options)
 
             letters = ["A", "B", "C", "D"]
@@ -507,9 +497,6 @@ class QuizGenerator:
             # Stage 6: Attach grounding fields
             correct_letter = question.get('correct', '')
             correct_text = get_correct_text_from_options(question.get('options', []), correct_letter)
-            print("question:", type(question), question)
-            print("fact_data:", type(fact_data), fact_data)
-            print("fact:", type(fact), fact)
             supporting_fact = question.get('supporting_fact') or fact_data.get('supporting_fact') or fact
 
             if not attach_grounding_fields(question, correct_text, sanitized_supporting_fact, context=fact):
@@ -587,31 +574,19 @@ class QuizGenerator:
             if not concept or not definition:
                 continue
 
-            fill_result = self.fill_blank_generator.generate_fill_blank(
-                topic,
-                supporting_facts[:count]
+            question = self.generate_with_retry(
+                fact=definition,
+                answer=concept,
+                topic=topic,
+                fact_data=fact_data,
+                supporting_facts=supporting_facts,
             )
 
-            question = (
-                fill_result["questions"][0]
-                if fill_result.get("questions")
-                else None
-            )
-
-            # Fallback to MCQ if fill blank failed
+            # Skip fact if fill blank generation failed
             if question is None:
-                question = self.generate_from_fact(
-                    fact=definition,
-                    answer=concept,
-                    topic=topic,
-                    fact_data=fact_data
-                )
+                continue
 
             if question:
-
-                print("\n===== QUESTION TYPE =====")
-                print(question.get("type"))
-                print(question)
 
                 if question.get("type", "mcq") != "fill_blank":
 
@@ -636,9 +611,9 @@ class QuizGenerator:
 
                 if question:
 
-                    print("\n===== QUESTION TYPE =====")
-                    print(question.get("type"))
-                    print(question)
+                    if question.get("type") != "multiple_choice":
+                        print("❌ Skipping non-MCQ question")
+                        continue
 
                     valid_questions.append(question)
 

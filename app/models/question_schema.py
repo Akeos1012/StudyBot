@@ -33,6 +33,9 @@ REQUIRED_MC_FIELDS = [
     "explanation"
 ]
 OPTIONAL_FIELDS = [
+    "topic",
+    "subtopic",
+    "question_id",
     "_is_fallback",
     "source_notes",
     "concept_type",
@@ -49,6 +52,9 @@ OPTIONAL_FIELDS = [
 
 # ===== Field Type Mappings =====
 FIELD_TYPES: Dict[str, Union[Type, List[Type]]] = {
+    "topic": str,
+    "subtopic": str,
+    "question_id": str,
     "question": str,
     "options": list,
     "correct": str,

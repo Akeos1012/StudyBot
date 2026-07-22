@@ -466,7 +466,7 @@ class GroundingProcessor:
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
         # Remove trailing punctuation
-        cleaned = cleaned.rstrip(" .")
+        cleaned = cleaned.rstrip(" .,;:")
 
         return cleaned
 

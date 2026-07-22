@@ -351,11 +351,6 @@ class QuestionScorer:
         correct_text = get_correct_text_from_options(options, answer_letter)
         distractors = get_distractor_texts(options, answer_letter)
 
-        print("\n===== DISTRACTOR DEBUG =====")
-        print("Correct:", correct_text)
-        print("Distractors:", distractors)
-        print("============================")
-
         if not distractors:
             return 0.0
 

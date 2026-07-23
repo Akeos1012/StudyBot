@@ -528,6 +528,43 @@ def _extract_concept(fact: Dict[str, Any]) -> Optional[str]:
 
     return str(concept).strip() if concept else None
 
+def _repair_merged_words(text: str) -> str:
+    """
+    Repair words merged during markdown preprocessing.
+    """
+
+    fixes = {
+        "tothe": "to the",
+        "inthe": "in the",
+        "fromthe": "from the",
+        "ofthe": "of the",
+        "onthe": "on the",
+        "forthe": "for the",
+
+        "relyingon": "relying on",
+        "accessand": "access and",
+        "accessedthrough": "accessed through",
+        "resourceson": "resources on",
+        "computingand": "computing and",
+
+        "theservice": "the service",
+        "devicessuch": "devices such",
+        "datastorage": "data storage",
+        "physicalserver": "physical server",
+        "centralizedcloud": "centralized cloud",
+        "computinginfrastructure": "computing infrastructure",
+        "dataremotely": "data remotely",
+    }
+
+    for bad, good in fixes.items():
+        text = re.sub(
+            bad,
+            good,
+            text,
+            flags=re.IGNORECASE
+        )
+
+    return text
 
 def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
     """Extract and clean definition from fact using multiple possible keys."""
@@ -544,6 +581,9 @@ def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
 
     definition = str(definition).strip()
 
+    # Remove HTML/markdown tags
+    definition = re.sub(r"<[^>]+>", "", definition)
+
     # Fix encoding corruption from markdown extraction
     definition = (
         definition
@@ -557,6 +597,8 @@ def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
     # Repair common markdown/parser spacing issues
     definition = re.sub(r"([a-z])([A-Z])", r"\1 \2", definition)
     definition = re.sub(r"\s+", " ", definition)
+
+    definition = _repair_merged_words(definition)
 
     return definition
 
@@ -600,7 +642,11 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     definition = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", definition)
     definition = re.sub(r"([,.!?])([A-Za-z])", r"\1 \2", definition)
+    # Remove HTML tags like <u></u>
+    definition = re.sub(r"<[^>]+>", "", definition)
     definition = re.sub(r"\s+", " ", definition).strip()
+
+    definition = _repair_merged_words(definition)
 
     # Validate concept
     if not validate_concept_name(concept):
@@ -639,6 +685,9 @@ def create_fact(
     concept_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a new fact with the correct schema."""
+    definition = _extract_definition({
+        "definition": definition
+    }) or definition
     if not validate_concept_name(concept):
         raise ValueError(f"Invalid concept name: {concept}")
 

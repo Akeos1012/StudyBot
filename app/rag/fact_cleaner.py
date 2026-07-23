@@ -64,11 +64,20 @@ def clean_text(text: str) -> str:
     for pattern in MARKDOWN_PATTERNS:
         text = re.sub(pattern, "", text)
 
+    # Remove HTML tags like <u>, </u>, <b>, <i>
+    text = re.sub(r"<[^>]+>", "", text)
+
     # Normalize whitespace
     text = re.sub(WHITESPACE_PATTERN, " ", text)
 
-    # Add spaces between camelCase words (e.g., "cloudStorage" -> "cloud Storage")
-    text = re.sub(CAMEL_CASE_PATTERN, r"\1 \2", text)
+    # Add spaces between camelCase words only
+    # Example: cloudStorage -> cloud Storage
+    # Avoid splitting normal words like "data", "information"
+    text = re.sub(
+        r"([a-z]{2,})([A-Z][a-z]+)",
+        r"\1 \2",
+        text
+    )
 
     # Fix common missing word boundaries
     WORD_BOUNDARY_FIXES = {
@@ -78,29 +87,50 @@ def clean_text(text: str) -> str:
         "ofthe": "of the",
         "onthe": "on the",
         "forthe": "for the",
-        "accessedthrough": "accessed through",
-        "facilitythat": "facility that",
-        "storedon": "stored on",
-        "physicalserver": "physical server",
-        "centralizedcloud": "centralized cloud",
-        "computinginfrastructure": "computing infrastructure",
-        "datastorage": "data storage",
+
         "relyingon": "relying on",
         "accessand": "access and",
+        "accessedthrough": "accessed through",
         "usecomputing": "use computing",
         "resourceson": "resources on",
-        "acrossdifferent": "across different",
-        "togetherwith": "together with",
-        "calleda": "called a",
+
+        "theservice": "the service",
+        "dataremotely": "data remotely",
+        "computingand": "computing and",
+        "devicessuch": "devices such",
+        "fileson": "files on",
+        "storedon": "stored on",
+        "infrastructureover": "infrastructure over",
+        "internetinstead": "internet instead",
     }
+
+    # Add spaces only for real camelCase words
+    text = re.sub(
+        r"([a-z])([A-Z][a-z]+)",
+        r"\1 \2",
+        text
+    )
+
+    # Normalize whitespace after all replacements
+    text = re.sub(r"\s+", " ", text)
 
     for bad, good in WORD_BOUNDARY_FIXES.items():
         text = re.sub(
-            rf"\b{bad}\b",
+            bad,
             good,
             text,
             flags=re.IGNORECASE
         )
+
+    # Fix remaining missing spaces between joined words
+    text = re.sub(
+        r"([a-z])([A-Z])",
+        r"\1 \2",
+        text
+    )
+
+    # Normalize whitespace again after replacements
+    text = re.sub(r"\s+", " ", text)
 
     return text.strip()
 
@@ -151,8 +181,8 @@ def clean_definition(concept: str, definition: str) -> str:
     )
 
     # Restore concept as sentence subject if removal leaves weak definition
-    if definition and not definition.lower().startswith(concept.lower()):
-        definition = f"{concept} {definition}"
+    # Do not restore concept here.
+    # Definitions should not contain duplicated concept prefixes.
 
     # Remove repeated concept at sentence start
     duplicate_pattern = (
@@ -194,9 +224,8 @@ def clean_fact(fact: Dict[str, Any]) -> Dict[str, Any]:
     cleaned["concept"] = concept
     cleaned["definition"] = definition
 
-    # Clean optional fields
-    if "sentence" in cleaned:
-        cleaned["sentence"] = clean_text(cleaned["sentence"])
+    # Keep sentence identical to cleaned definition
+    cleaned["sentence"] = definition
 
     if "supporting_fact" in cleaned:
         cleaned["supporting_fact"] = clean_definition(

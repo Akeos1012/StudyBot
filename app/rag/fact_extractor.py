@@ -508,7 +508,7 @@ class SemanticConceptExtractor:
         if words[0].lower() in bad_fragment_starts:
             return False
 
-        # Reject sentence-like endings
+        # Reject concepts containing verb phrases
         sentence_words = {
             "is",
             "are",
@@ -517,15 +517,38 @@ class SemanticConceptExtractor:
             "works",
             "work",
             "helps",
+            "help",
             "uses",
+            "use",
             "allows",
+            "allow",
             "provides",
+            "provide",
             "contains",
+            "contain",
             "includes",
+            "include",
             "focuses",
+            "focus",
+            "solves",
+            "solve",
+            "stores",
+            "store",
+            "processes",
+            "process",
+            "supports",
+            "support",
+            "handles",
+            "handle",
+            "performs",
+            "perform",
+            "executes",
+            "execute",
+            "runs",
+            "run",
         }
 
-        if words[-1].lower() in sentence_words:
+        if any(word.lower() in sentence_words for word in words):
             return False
 
         return True
@@ -923,6 +946,10 @@ class FactExtractor:
         cleaned = re.sub(r"^\s*[-*+]\s*", "", cleaned)
         cleaned = re.sub(r"^\s*\d+\.\s*", "", cleaned)
         cleaned = re.sub(r"\[\[(.*?)\]\]", r"\1", cleaned)
+        # Remove HTML tags first
+        cleaned = re.sub(r"<[^>]+>", "", cleaned)
+
+        # Remove markdown symbols
         cleaned = re.sub(r"[*_`>#]", "", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
@@ -1044,6 +1071,8 @@ class FactExtractor:
             )
 
             statement = cleaned[:220]
+            if len(cleaned) > 220:
+                statement = statement.rsplit(" ", 1)[0] + "..."
             fact_id = f"{self._slugify(topic)}_{self._slugify(source_note)}_{self._slugify(concept)[:20]}"
 
             fact["fact_id"] = fact_id

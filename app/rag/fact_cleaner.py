@@ -31,8 +31,7 @@ ENCODING_FIXES = {
 # Patterns to remove from text
 MARKDOWN_PATTERNS = [
     r"[*_#`]",  # Markdown formatting
-    r"^-\s*",  # Markdown list bullets (start of line)
-    r"^\\-\s*",  # Escaped list bullets
+    r"(?m)^\s*[-*+]\s+",
 ]
 
 # Patterns to normalize
@@ -71,17 +70,37 @@ def clean_text(text: str) -> str:
     # Add spaces between camelCase words (e.g., "cloudStorage" -> "cloud Storage")
     text = re.sub(CAMEL_CASE_PATTERN, r"\1 \2", text)
 
-        # Fix common missing word boundaries
+    # Fix common missing word boundaries
     WORD_BOUNDARY_FIXES = {
-        "serverswithout": "servers without",
-        "remoteservers": "remote servers",
-        "accessedover": "accessed over",
-        "savingfiles": "saving files",
-        "cloudstorage": "cloud storage",
+        "tothe": "to the",
+        "inthe": "in the",
+        "fromthe": "from the",
+        "ofthe": "of the",
+        "onthe": "on the",
+        "forthe": "for the",
+        "accessedthrough": "accessed through",
+        "facilitythat": "facility that",
+        "storedon": "stored on",
+        "physicalserver": "physical server",
+        "centralizedcloud": "centralized cloud",
+        "computinginfrastructure": "computing infrastructure",
+        "datastorage": "data storage",
+        "relyingon": "relying on",
+        "accessand": "access and",
+        "usecomputing": "use computing",
+        "resourceson": "resources on",
+        "acrossdifferent": "across different",
+        "togetherwith": "together with",
+        "calleda": "called a",
     }
 
     for bad, good in WORD_BOUNDARY_FIXES.items():
-        text = text.replace(bad, good)
+        text = re.sub(
+            rf"\b{bad}\b",
+            good,
+            text,
+            flags=re.IGNORECASE
+        )
 
     return text.strip()
 
@@ -123,7 +142,7 @@ def clean_definition(concept: str, definition: str) -> str:
         return definition
 
     # Remove concept prefix
-    pattern = rf"^{re.escape(concept)}\s*[-:–—]?\s*"
+    pattern = rf"^{re.escape(concept)}\s*[-:–—:]?\s*"
     definition = re.sub(
         pattern,
         "",
@@ -131,15 +150,19 @@ def clean_definition(concept: str, definition: str) -> str:
         flags=re.IGNORECASE
     )
 
+    # Restore concept as sentence subject if removal leaves weak definition
+    if definition and not definition.lower().startswith(concept.lower()):
+        definition = f"{concept} {definition}"
+
     # Remove repeated concept at sentence start
     duplicate_pattern = (
-        rf"\b{re.escape(concept)}\b\s+"
-        rf"\b{re.escape(concept)}\b"
+        rf"^{re.escape(concept)}\s*[-:–—]?\s*"
+        rf"{re.escape(concept)}\b\s*"
     )
 
     definition = re.sub(
         duplicate_pattern,
-        concept,
+        "",
         definition,
         flags=re.IGNORECASE
     )

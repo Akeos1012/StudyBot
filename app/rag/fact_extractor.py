@@ -917,6 +917,7 @@ class FactExtractor:
         """Clean text for extraction."""
         if not text:
             return ""
+
         cleaned = text.strip()
         cleaned = re.sub(r"^\s*#+\s*", "", cleaned)
         cleaned = re.sub(r"^\s*[-*+]\s*", "", cleaned)
@@ -924,7 +925,49 @@ class FactExtractor:
         cleaned = re.sub(r"\[\[(.*?)\]\]", r"\1", cleaned)
         cleaned = re.sub(r"[*_`>#]", "", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+        # Fix camelCase / merged words from markdown preprocessing
+        cleaned = re.sub(
+            r"([a-z])([A-Z])",
+            r"\1 \2",
+            cleaned
+        )
+
+        # Repair common missing spaces from markdown preprocessing
+        WORD_BOUNDARY_FIXES = {
+            "tothe": "to the",
+            "inthe": "in the",
+            "fromthe": "from the",
+            "ofthe": "of the",
+            "onthe": "on the",
+            "forthe": "for the",
+
+            "tothedelivery": "to the delivery",
+            "accessedthrough": "accessed through",
+            "accessand": "access and",
+            "resourceson": "resources on",
+            "relyingon": "relying on",
+            "computingservices": "computing services",
+
+            "facilitythat": "facility that",
+            "physicalserver": "physical server",
+            "centralizedcloud": "centralized cloud",
+            "computinginfrastructure": "computing infrastructure",
+            "datastorage": "data storage",
+            "informationremotely": "information remotely",
+        }
+
+        for bad, good in WORD_BOUNDARY_FIXES.items():
+            cleaned = re.sub(
+                bad,
+                good,
+                cleaned,
+                flags=re.IGNORECASE
+            )
+
         return cleaned.rstrip(" .")
+
+    
 
     def _slugify(self, text: str) -> str:
         return re.sub(r"[^a-z0-9]+", "_", str(text or "").lower()).strip("_")
@@ -1149,5 +1192,12 @@ class FactExtractor:
 if __name__ == "__main__":
     extractor = FactExtractor()
     all_facts = extractor.extract_all()
+
+    for topic, facts in all_facts.items():
+        if topic.lower() == "cloud":
+            print("\n=== CLOUD FACTS ===")
+            for fact in facts:
+                print(fact)
+
     total = sum(len(v) for v in all_facts.values())
     print(f"\nTotal: {total} facts across {len(all_facts)} topics")

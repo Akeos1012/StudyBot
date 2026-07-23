@@ -1,0 +1,194 @@
+/* ============================================
+   APP - ROOT LAYOUT
+   ============================================ */
+:root {
+  --bg-primary: #0a0b0e;
+  --bg-secondary: #101116;
+  --bg-surface: #181a20;
+  --bg-elevated: #22252d;
+  --border-color: #2a2d36;
+  --border-light: rgba(42, 45, 54, 0.4);
+  
+  --accent-primary: #8b7cf6;
+  --accent-secondary: #5eead4;
+  --accent-tertiary: #f472b6;
+  --accent-gradient: linear-gradient(135deg, #8b7cf6, #5eead4);
+  --accent-gradient-2: linear-gradient(135deg, #8b7cf6, #f472b6);
+  
+  --text-primary: #f1f3f5;
+  --text-secondary: #c8ced6;
+  --text-muted: #8892a0;
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 40px rgba(139, 124, 246, 0.08);
+  
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 124, 246, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 124, 246, 0.5);
+}
+
+/* ============================================
+   APP LAYOUT
+   ============================================ */
+.sb-app {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.sb-app::before {
+  content: '';
+  position: fixed;
+  top: -40%;
+  right: -20%;
+  width: 60%;
+  height: 80%;
+  background: radial-gradient(ellipse, rgba(139, 124, 246, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sb-app::after {
+  content: '';
+  position: fixed;
+  bottom: -30%;
+  left: -20%;
+  width: 50%;
+  height: 70%;
+  background: radial-gradient(ellipse, rgba(94, 234, 212, 0.03) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sb-app-layout {
+  display: flex;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  height: calc(100vh - 60px);
+}
+
+.sb-main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px 32px 32px;
+  background: transparent;
+}
+
+/* ============================================
+   GLASSMORPHISM UTILITY
+   ============================================ */
+.glass {
+  background: rgba(24, 26, 32, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(42, 45, 54, 0.3);
+}
+
+.glass-light {
+  background: rgba(34, 37, 45, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 45, 54, 0.2);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 124, 246, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(139, 124, 246, 0.15);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.sb-animate-in {
+  animation: fadeSlideUp 0.4s ease forwards;
+}
+
+.sb-animate-in-delay-1 {
+  animation-delay: 0.05s;
+  opacity: 0;
+}
+.sb-animate-in-delay-2 {
+  animation-delay: 0.1s;
+  opacity: 0;
+}
+.sb-animate-in-delay-3 {
+  animation-delay: 0.15s;
+  opacity: 0;
+}
+.sb-animate-in-delay-4 {
+  animation-delay: 0.2s;
+  opacity: 0;
+}

@@ -14,6 +14,7 @@ All validation and deduplication logic is delegated to dedicated modules.
 import json
 import hashlib
 import random
+from datetime import datetime
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -30,8 +31,9 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 DEFAULT_CACHE_FILE = "question_cache.json"
-DEFAULT_POOL_SIZE = 30
-MAX_POOL_SIZE_MULTIPLIER = 2
+DEFAULT_POOL_SIZE = 100
+DEFAULT_USED_LIMIT = 100
+MAX_POOL_SIZE_MULTIPLIER = 3
 
 CACHE_VERSION = 1
 CACHE_METADATA_KEY = "__metadata__"
@@ -264,7 +266,7 @@ class QuestionCache:
         topic: str,
         subtopic: str = "",
         difficulty: str = "medium",
-        qtype: str = "multiple",
+        qtype: str = "multiple_choice",
         count: int = 3,
     ) -> Optional[List[Dict[str, Any]]]:
         """
@@ -288,14 +290,51 @@ class QuestionCache:
             )
             return None
 
-        return random.sample(pool, count)
+
+        unused = [
+            q for q in pool
+            if q.get("usage_count", 0) == 0
+        ]
+
+
+        if len(unused) >= count:
+            selected = random.sample(
+                unused,
+                count
+            )
+        else:
+            logger.info(
+                "All questions used. Selecting least recently seen."
+            )
+
+            selected = sorted(
+                pool,
+                key=lambda q: q.get(
+                    "last_seen",
+                    ""
+                )
+            )[:count]
+
+
+        for q in selected:
+            q["usage_count"] = q.get(
+                "usage_count",
+                0
+            ) + 1
+
+            q["last_seen"] = datetime.now().isoformat()
+
+
+        self.save_cache()
+
+        return selected
 
     def get_pool_size(
         self,
         topic: str,
         subtopic: str = "",
         difficulty: str = "medium",
-        qtype: str = "multiple",
+        qtype: str = "multiple_choice",
     ) -> int:
         """
         Get the current pool size.

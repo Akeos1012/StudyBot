@@ -344,11 +344,11 @@ def validate_question_focus(
             overlap = len(fact_words & q_words) / len(fact_words)
 
             # Strong semantic overlap
-            if overlap >= 0.25:
+            if overlap >= 0.18:
                 return True
 
             # Absolute overlap for shorter facts
-            if len(fact_words & q_words) >= 3:
+            if len(fact_words & q_words) >= 2:
                 return True
 
 

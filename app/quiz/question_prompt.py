@@ -84,6 +84,18 @@ STRICT RULES:
 
 2.5 Question Focus Rules
 
+Avoid using broader category terms in the question when they overlap with distractor choices.
+
+Examples:
+Bad:
+"Which cloud storage technology uses fixed-size blocks?"
+(Gives away a broader category and makes Cloud Storage appear correct)
+
+Good:
+"Which storage technology manages data in fixed-size units called blocks?"
+
+The question must describe the unique property of the TARGET CONCEPT, not its parent category.
+
    The question must clearly be about "{answer}".
 
    The reader should know the TARGET CONCEPT is being described before reading the answer choices.
@@ -103,16 +115,37 @@ STRICT RULES:
    Good:
    "Which technology provides computing resources such as storage, databases, and software over the internet?"
 
-   For abstract concepts, infrastructure terms, systems, technologies, and named concepts:
+   For named concepts and technologies:
 
-   - Prefer including "{answer}" in the question text.
-   - If including "{answer}" creates a definition-style question, the question may describe the concept using unique characteristics from the FACT.
+   Prefer identifying the TARGET CONCEPT using its unique characteristics.
+
+   Include "{answer}" in the question only when necessary to avoid ambiguity.
+
+   Do not replace the concept with a broader category.
+
+   Examples:
+
+   Bad:
+   "Which cloud storage technology uses fixed-size blocks?"
+   Reason:
+   Cloud Storage is a broader category and could also match.
+
+   Good:
+   "Which cloud storage technology stores files in fixed-size units called blocks?"
+
+   Bad:
+   "Which service stores data remotely?"
+   Reason:
+   Multiple concepts can match.
+
+   Good:
+   "Which technology stores data as independent blocks that can be accessed separately?"
    - The question must still clearly identify "{answer}" and must not describe a broader category or a different concept.
 
    Avoid writing overly generic questions that could describe many different concepts.
 
    Good:
-   Which cloud storage technology stores files on remote servers?
+   Which technology stores digital files on remote servers instead of local devices?
 
    Good:
    Cloud Storage is primarily designed for which purpose?
@@ -125,15 +158,19 @@ STRICT RULES:
 
 3. The question must be answerable ONLY using the FACT.
 
-4. The correct answer option MUST be exactly:
+4. One option must contain exactly:
    "{answer}"
+
+   The option letter may be A, B, C, or D.
 
 5. The correct field MUST contain only the option letter:
    "A", "B", "C", or "D"
 
 6. Return exactly 4 options:
 
-   - Option A must be exactly "{answer}"
+   - The correct option must contain exactly "{answer}".
+   - The correct field must contain the letter of that option.
+   - The correct answer position may be A, B, C, or D.
    - Options B, C, and D must be real concepts from the FACT or closely related concepts already implied by the FACT.
    - NEVER write placeholders.
    - NEVER write:

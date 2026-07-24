@@ -40,6 +40,7 @@ class DistractorSelector:
     ):
         target_concept = target_fact.get("concept")
         target_type = target_fact.get("concept_type")
+        target_topic = target_fact.get("topic")
 
         candidates = []
 
@@ -61,9 +62,52 @@ class DistractorSelector:
             if fact.get("concept_type") != target_type:
                 continue
 
+            # prefer same topic
+            if target_topic and fact.get("topic") != target_topic:
+                continue
+
             candidates.append(fact)
 
         return candidates
+
+    def rank_distractors(
+        self,
+        facts,
+        target_fact
+    ):
+        target = target_fact.get("concept", "").lower()
+
+        scored = []
+
+        for fact in facts:
+            concept = fact.get("concept", "").lower()
+
+            score = 0
+
+            # same topic bonus
+            if fact.get("topic") == target_fact.get("topic"):
+                score += 2
+
+            # same concept length/type similarity
+            if len(concept.split()) == len(target.split()):
+                score += 1
+
+            scored.append(
+                (
+                    score,
+                    fact
+                )
+            )
+
+        scored.sort(
+            key=lambda x: x[0],
+            reverse=True
+        )
+
+        return [
+            item[1]
+            for item in scored
+        ]
 
 
     def select_distractors(
@@ -79,7 +123,11 @@ class DistractorSelector:
 
         distractors = []
 
-        random.shuffle(compatible)
+        # rank candidates before selection
+        compatible = self.rank_distractors(
+            compatible,
+            target_fact
+        )
 
         for fact in compatible:
 

@@ -32,7 +32,7 @@ from ..quiz.validation_logger import set_metrics, get_metrics
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-
+POOL_REFILL_AMOUNT = 10
 
 class QuizService:
     """
@@ -108,6 +108,7 @@ class QuizService:
             extracted_facts,
             topic,
             count,
+            "multiple",
         )
 
         logger.info(
@@ -146,6 +147,11 @@ class QuizService:
 
         for q in questions:
             q["difficulty"] = difficulty
+
+            if q.get("type") == "fill_blank":
+                q["question_type"] = "fillblank"
+            else:
+                q["question_type"] = "multiple"
         return questions[:count]
 
     def get_or_generate_questions(
@@ -186,47 +192,64 @@ class QuizService:
                 count=count
             )
 
-        pool = cache.get_pool(topic, subtopic, difficulty, question_type)
-        logger.info("Pool size: %s", len(pool))
+        pool = cache.get_pool(
+            topic,
+            subtopic,
+            difficulty,
+            question_type
+        )
 
-        if len(pool) < count:
-            logger.info("Generating new questions...")
-            metrics = get_metrics()
-            logger.info(f"Pool size {len(pool)} is below minimum. Generating more.")
+        logger.info(
+            "Current question pool size: %s",
+            len(pool)
+        )
 
-            new_questions = self.generate_questions_for_topic(
-                topic, subtopic, difficulty, count  # Pass count to generate_questions_for_topic
-            )
 
-            generator_metrics = self.quiz_generator.get_metrics()
+        # Always create a new quiz session
+        logger.info(
+            "Generating fresh questions for user session"
+        )
+
+
+        new_questions = self.generate_questions_for_topic(
+            topic,
+            subtopic,
+            difficulty,
+            max(count, POOL_REFILL_AMOUNT)
+        )
+
+
+        real_questions = [
+            q for q in new_questions
+            if not q.get("_is_fallback", False)
+        ]
+
+
+        if real_questions:
+
+            added = 0
+
+            for q in real_questions:
+                q_type = q.get("question_type", "multiple")
+
+                result = cache.add_to_pool(
+                    topic,
+                    subtopic,
+                    difficulty,
+                    q_type,
+                    [q]
+                )
+
+                if result:
+                    added += result
 
             logger.info(
-                "QuizGenerator metrics: %s",
-                generator_metrics
+                "Added %s new questions into pool",
+                added
             )
 
-            metrics = get_metrics()
-
-            if metrics:
-                metrics.llm_calls = generator_metrics["llm_calls"]
-                metrics.llm_time = generator_metrics["llm_time"]
-
-            real_questions = [
-                q for q in new_questions if not q.get("_is_fallback", False)
-            ]
-
-            if real_questions:
-                added = cache.add_to_pool(
-                    topic, subtopic, difficulty, question_type, real_questions
-                )
-                logger.info(f"Added {added} questions to cache")
-
-            pool = cache.get_pool(topic, subtopic, difficulty, question_type)
-
-        sampled = cache.sample(topic, subtopic, difficulty, question_type, count)
-
-        result = sampled or pool[:count]
-
+        # Return only new questions
+        result = real_questions[:count]
 
         performance_data = performance_monitor.stop()
 
@@ -372,6 +395,7 @@ class QuizService:
         facts: List[Dict[str, Any]],
         topic: str,
         target_count: int,
+        question_type: str = "multiple",
     ) -> List[Dict[str, Any]]:
 
         questions = []
@@ -402,6 +426,7 @@ class QuizService:
                 topic,
                 fact_data=fact_data,
                 supporting_facts=facts,
+                question_type=question_type,
             )
 
             llm_duration = time.perf_counter() - llm_start

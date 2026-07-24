@@ -566,15 +566,42 @@ def _repair_merged_words(text: str) -> str:
 
     return text
 
+
+def _repair_encoding(text: str) -> str:
+    """
+    Repair common UTF-8 mojibake corruption.
+    """
+
+    replacements = {
+        "â€“": "-",
+        "â€”": "-",
+        "â€™": "'",
+        "â€œ": '"',
+        "â€": '"',
+
+        # Double corrupted forms
+        "Ã¢â‚¬â€œ": "-",
+        "Ã¢â‚¬â€": '"',
+        "Ã¢â‚¬â„¢": "'",
+        "Ã¢â‚¬Å“": '"',
+    }
+
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+
+    return text
+
 def _extract_definition(fact: Dict[str, Any]) -> Optional[str]:
     """Extract and clean definition from fact using multiple possible keys."""
+
     definition = (
         fact.get("definition")
         or fact.get("sentence")
-        or fact.get("description")
-        or fact.get("content")
-        or fact.get("text")
+        or fact.get("supporting_fact")
+        or ""
     )
+
+    definition = _repair_encoding(definition)
 
     if not definition:
         return None
@@ -631,14 +658,7 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     # Repair merged words caused by markdown preprocessing
 
     # Repair encoding corruption
-    definition = (
-        definition
-        .replace("â€“", "-")
-        .replace("â€”", "-")
-        .replace("â€™", "'")
-        .replace("â€œ", '"')
-        .replace("â€", '"')
-    )
+    definition = _repair_encoding(definition)
 
     definition = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", definition)
     definition = re.sub(r"([,.!?])([A-Za-z])", r"\1 \2", definition)

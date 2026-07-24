@@ -137,7 +137,7 @@ def filter_similar_questions(
                     seen
                 ).ratio()
 
-                if similarity > 0.90 and is_similar_to_pool(q, unique, 0.85):
+                if similarity > 0.95 and correct_text == seen:
                     duplicate_answer = True
                     break
 
@@ -146,7 +146,7 @@ def filter_similar_questions(
             continue
 
         # Check question similarity
-        if is_similar_to_pool(q, unique, threshold):
+        if is_similar_to_pool(q, unique, threshold=0.95):
             print(f"❌ Removed similar question: {q['question']}")
             continue
 
@@ -278,6 +278,7 @@ class QuizGenerator:
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         fact_data: dict = None,
         supporting_facts: list = None,
+        question_type: str = "multiple",
     ) -> Optional[dict]:
         """
         Generate a question with retries if validation fails.
@@ -307,7 +308,9 @@ class QuizGenerator:
                 fact,
                 answer,
                 topic,
-                fact_data
+                fact_data,
+                style_hint=None,
+                question_type=question_type
             )
             if question:
 
@@ -330,7 +333,8 @@ class QuizGenerator:
         answer: str,
         topic: str,
         fact_data: dict = None,
-        style_hint: str = None
+        style_hint: str = None,
+        question_type: str = "multiple",
     ) -> Optional[dict]:
         """
         Generate a question from a single fact with coherence checking.
@@ -358,18 +362,48 @@ class QuizGenerator:
 
         # Sanitize supporting fact
         sanitized_supporting_fact = sanitize_supporting_fact(supporting_fact, answer)
+
         if not sanitized_supporting_fact:
             print(f"⚠️ Skipping fact due to layer phrase: {supporting_fact[:60]}...")
             return None
 
         fact_for_prompt = sanitized_supporting_fact
 
+
+        # Prevent LLM hallucinating concepts not supported by fact
+        fact_lower = fact_for_prompt.lower()
+
+        # Include the concept name when checking grounding.
+        # Some extracted facts store the definition separately from the concept.
+        grounding_text = (
+            fact_lower +
+            " " +
+            answer.lower()
+        )
+
+        answer_words = [
+            w.lower()
+            for w in answer.split()
+            if len(w) > 3
+        ]
+
+        matched = [
+            w for w in answer_words
+            if w in grounding_text
+        ]
+
+        if answer_words and len(matched) < max(1, len(answer_words) // 2):
+            print(
+                f"⚠️ Skipping fact: answer '{answer}' not grounded in fact"
+            )
+            return None
+
         # Build prompt
         prompt = build_fact_question_prompt(
             fact_for_prompt,
             answer,
             topic,
-            style_hint=style_hint
+            style_hint="The correct answer must appear explicitly or be directly described in the FACT. Never use related concepts that are not mentioned."
         )
 
         try:
@@ -442,6 +476,12 @@ class QuizGenerator:
                 return None
 
             # Stage 2: Content - Grounding
+            print("\n=== GROUNDING DEBUG ===")
+            print("ANSWER:", answer)
+            print("SANITIZED FACT:", sanitized_supporting_fact)
+            print("CONTEXT FACT:", fact)
+            print("=======================\n")
+
             if not validate_grounding(question, fact, supporting_fact=sanitized_supporting_fact):
                 return None
 
@@ -549,9 +589,18 @@ class QuizGenerator:
             count=count
         )
 
-        if cached_questions:
-            print(f"📦 Cache hit ({len(cached_questions)} questions)")
+        pool_size = self.cache.get_pool_size(
+            topic=topic,
+            subtopic="",
+            difficulty="medium",
+            qtype="multiple_choice",
+        )
+
+        if cached_questions and len(cached_questions) >= count:
+            print(f"📦 Cache hit ({len(cached_questions)} questions, pool={pool_size})")
             return {"questions": cached_questions}
+
+        print(f"📦 Cache insufficient (pool={pool_size}), generating more...")
 
         print("📦 Cache miss. Generating new questions...")
 
@@ -562,9 +611,10 @@ class QuizGenerator:
             return {"questions": []}
 
         valid_questions = []
-
+        
         # Process up to 3x requested count for filtering
-        for fact_data in supporting_facts[:count * settings.FACT_MULTIPLIER]:
+        generation_pool = supporting_facts * settings.FACT_MULTIPLIER
+        for fact_data in generation_pool[:count * settings.FACT_MULTIPLIER]:
             if not isinstance(fact_data, dict):
                 continue
 
@@ -611,12 +661,31 @@ class QuizGenerator:
 
                 if question:
 
-                    if question.get("type") != "multiple_choice":
-                        print("❌ Skipping non-MCQ question")
+                    if question.get("type") not in ["multiple_choice", "fill_blank"]:
+                        print("❌ Skipping unsupported question type")
+                        continue
+
+                    if is_similar_to_pool(
+                        question,
+                        valid_questions,
+                        threshold=SIMILARITY_THRESHOLD
+                    ):
+                        print("❌ Skipped duplicate during generation")
+                        continue
+
+                    # Prevent same concept appearing multiple times
+                    existing_concepts = {
+                        q.get("concept", "").lower()
+                        for q in valid_questions
+                    }
+
+                    if concept.lower() in existing_concepts:
+                        print(
+                            f"❌ Duplicate concept skipped: {concept}"
+                        )
                         continue
 
                     valid_questions.append(question)
-
                     print("✅ ACCEPTED")
 
                     if len(valid_questions) >= count:
@@ -637,13 +706,17 @@ class QuizGenerator:
         self._generated_questions.extend(valid_questions)
 
         if valid_questions:
-            self.cache.add_to_pool(
+            print(f"💾 Saving {len(valid_questions)} questions to cache")
+
+            result = self.cache.add_to_pool(
                 topic=topic,
                 subtopic="",
                 difficulty="medium",
-                qtype="multiple",
+                qtype="multiple_choice",
                 new_questions=valid_questions,
             )
+
+            print(f"💾 Added result: {result}")
 
         return {"questions": valid_questions}
 

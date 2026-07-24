@@ -63,12 +63,21 @@ def is_similar_to_pool(
 
         fact_similarity = similarity(new_fact, old_fact)
 
-        if question_similarity >= threshold and answer_similarity >= 0.85:
+        if question_similarity >= threshold and new_answer == old_answer:
             print(f"❌ Removed duplicate question: {new_question}")
             return True
 
-        if answer_similarity >= 0.95 and fact_similarity >= 0.85:
-            print(f"❌ Removed duplicate concept: {new_question}")
+        # Same concept is allowed.
+        # Only reject if the supporting fact AND wording are almost identical.
+
+        if (
+            answer_similarity >= 0.95
+            and fact_similarity >= 0.92
+            and question_similarity >= 0.75
+        ):
+            print(
+                f"❌ Removed duplicate concept/question pattern: {new_question}"
+            )
             return True
 
     return False

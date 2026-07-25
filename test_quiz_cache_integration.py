@@ -17,8 +17,7 @@ topic = "Cloud Computing"
 generator = QuizGenerator()
 
 result = generator.generate_questions(
-    context,
-    topic,
+    topic=topic,
     count=1,
     supporting_facts=[
         "Cloud storage allows users to store files remotely"

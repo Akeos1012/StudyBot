@@ -92,7 +92,14 @@ def test_quiz_service():
     loader = MetadataLoader("sample_notes")
     loader.load_metadata()
 
-    service = QuizService(loader)
+    from app.quiz.quiz_generator import QuizGenerator
+
+    generator = QuizGenerator()
+
+    service = QuizService(
+        loader,
+        generator
+    )
 
     # Test question generation
     print("\n📝 Generating questions for 'Cloud'...")

@@ -662,6 +662,7 @@ class QuizGenerator:
             question["fact_id"] = question.get("fact_id") or fact_data.get("fact_id") or ""
             question["concept_type"] = question.get("concept_type") or fact_data.get("concept_type") or "concept"
             question["concept"] = question.get("concept") or fact_data.get("concept") or answer
+            question["cognitive_type"] = question_style
 
             # ===== VALIDATION PIPELINE =====
 

@@ -35,33 +35,109 @@ def build_fact_question_prompt(
     question_type_instruction = ""
 
     if question_type:
-        question_type_instruction = f"""
+      type_rules = {
+        "definition": """
+Create a question that tests the meaning or purpose of the concept.
+Focus on what the concept does, not a dictionary definition.
+
+Example:
+"Which service allows users to store files remotely through internet-based infrastructure?"
+""",
+
+        "comparison": """
+Create a question that requires distinguishing the TARGET CONCEPT from another related concept.
+
+The question must compare properties, behavior, purpose, or usage.
+
+Example:
+"How does object storage differ from traditional file storage?"
+""",
+
+        "application": """
+Create a question where the learner must apply the concept to a practical situation.
+
+Do not ask what the concept is.
+Ask when or how it should be used.
+
+Example:
+"A company needs scalable storage without maintaining physical servers. Which concept fits this requirement?"
+""",
+
+        "scenario": """
+Create a realistic situation where the learner identifies the correct concept.
+
+The question should describe a problem or environment.
+
+Example:
+"A developer wants users to access files from multiple devices without local storage. What technology is being used?"
+""",
+
+        "relationship": """
+Create a question about how this concept connects with another concept mentioned in the FACT.
+
+Focus on dependency, interaction, or role.
+
+Example:
+"How does cloud storage support applications running in cloud environments?"
+""",
+
+        "recognition": """
+Create a question where the learner identifies the concept from unique characteristics.
+
+Do not mention the concept name directly.
+
+Example:
+"Which technology stores data as independent objects with metadata?"
+""",
+
+        "cause_effect": """
+Create a question that tests why something happens or what result occurs.
+
+Focus on reasoning, not memorization.
+
+Example:
+"Why do organizations use cloud databases instead of maintaining local database servers?"
+""",
+
+        "classification": """
+Create a question where the learner identifies the category or type of the concept.
+
+Example:
+"Which category does this storage method belong to based on its behavior?"
+""",
+
+"error_detection": """
+Create an error detection question.
+
+The question should present a statement, process, or situation
+related only to the FACT.
+
+Ask the learner to identify what is incorrect, missing, or
+misunderstood.
+
+The incorrect element must be based on the FACT.
+Do not invent errors using outside knowledge.
+
+Example pattern:
+"Which statement about [concept] contains an error?"
+"Which explanation incorrectly describes [concept]?"
+""",
+
+    }
+
+    question_type_instruction = f"""
 QUESTION TYPE:
-You MUST create a {question_type} style question.
+{question_type}
 
-The question style controls the reasoning pattern:
+Follow this cognitive pattern:
 
-- definition: identify what the concept does
-- comparison: distinguish between similar concepts
-- application: apply the concept in a situation
-- scenario: describe a realistic usage case
-- relationship: test how concepts connect
-- recognition: identify the concept from unique properties
-- cause_effect: test why something happens
-- classification: identify category or type
+{type_rules.get(question_type.lower(), "")}
 
-Do not always start with "Which technology".
-Change the reasoning pattern, not only the wording.
+IMPORTANT:
+The question type must change the reasoning task.
+Do not only rewrite the wording.
 
-Adapt the question reasoning to this style.
-"""
-
-    if style_hint:
-        style_instruction = f"""
-STYLE HINT:
-{style_hint}
-
-Apply this style while keeping all grounding rules.
+A {question_type} question must feel different from a definition question.
 """
 
     return f"""

@@ -1,20 +1,60 @@
 # app/services/quiz_service.py
-"""
-Quiz Service - Orchestrates quiz generation.
-
-This service coordinates the quiz generation pipeline:
-- Retrieving notes
-- Extracting facts
-- Generating questions
-- Managing cache
-- Formatting responses
-
-This module is NOT responsible for:
-- HTTP handling (main.py)
-- Question validation rules
-- LLM communication
-- Prompt construction
-"""
+# =====================================================
+# PIPELINE CHECKPOINT: SERVICE ORCHESTRATION LAYER
+#
+# Position:
+#
+# API Route
+#      ↓
+# QuizService
+#      ↓
+# MetadataLoader
+#      ↓
+# FactExtractor
+#      ↓
+# GroundingProcessor
+#      ↓
+# QuizGenerator
+#      ↓
+# Question Cache
+#
+# Purpose:
+# Coordinates the quiz generation workflow.
+#
+# Responsibilities:
+# - Retrieve notes
+# - Rank relevant notes
+# - Extract facts
+# - Ground extracted knowledge
+# - Request question generation
+# - Manage question pool/cache
+# - Collect performance metrics
+#
+# Connected Modules:
+#
+# Called by:
+#   - app/api/routes.py
+#
+# Uses:
+#   - app/rag/metadata_loader.py
+#   - app/rag/fact_extractor.py
+#   - app/rag/grounding_processor.py
+#   - app/quiz/quiz_generator.py
+#   - app/quiz/question_cache.py
+#   - app/monitoring/quiz_metrics.py
+#
+# IMPORTANT RULES:
+#
+# - This layer coordinates only.
+# - Do not add validation rules here.
+# - Do not allow LLM output to modify facts.
+# - Facts remain the source of truth.
+# - Generation failures should return safely.
+#
+# Risk:
+# Changing flow order can break grounding,
+# caching behavior, or metric tracking.
+# =====================================================
 
 import time
 import logging
@@ -34,23 +74,52 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 POOL_REFILL_AMOUNT = 10
 
+
 class QuizService:
     """
-    Service for generating and managing quizzes.
+    CHECKPOINT:
+    Quiz pipeline controller
 
-    The service coordinates existing components.
-    It does not create QuizGenerator instances repeatedly.
+    Receives:
+        Topic request
+        Difficulty
+        Question count
+        Question type
 
-    Usage:
-        service = QuizService(
-            metadata_loader,
-            quiz_generator
-        )
+    Returns:
+        Generated validated quiz questions
 
-        questions = service.get_or_generate_questions(
-            "Cloud Computing",
-            count=3
-        )
+    Pipeline:
+
+        Notes
+          ↓
+        Facts
+          ↓
+        Grounding
+          ↓
+        Question Generation
+          ↓
+        Cache Pool
+          ↓
+        Response
+
+    Connected:
+        MetadataLoader
+            ↓
+        FactExtractor
+            ↓
+        GroundingProcessor
+            ↓
+        QuizGenerator
+
+    Must not:
+        - Create facts
+        - Rewrite source knowledge
+        - Contain LLM prompts
+        - Replace validators
+
+    Risk:
+        Changes here affect the entire quiz workflow.
     """
 
     def __init__(self, metadata_loader: MetadataLoader, quiz_generator: QuizGenerator):
@@ -192,24 +261,28 @@ class QuizService:
                 count=count
             )
 
-        pool = cache.get_pool(
+        if not fresh:
+            cached_questions = cache.sample(
+                topic,
+                subtopic,
+                difficulty,
+                question_type,
+                count
+            )
+            if cached_questions and len(cached_questions) >= count:
+                logger.info(
+                    "Serving %d cached questions from pool for topic '%s'",
+                    len(cached_questions),
+                    topic
+                )
+                return cached_questions
+
+        # Generate fresh questions if cache bypass requested or pool is depleted
+        logger.info(
+            "Generating fresh questions for topic '%s' (fresh=%s)",
             topic,
-            subtopic,
-            difficulty,
-            question_type
+            fresh
         )
-
-        logger.info(
-            "Current question pool size: %s",
-            len(pool)
-        )
-
-
-        # Always create a new quiz session
-        logger.info(
-            "Generating fresh questions for user session"
-        )
-
 
         new_questions = self.generate_questions_for_topic(
             topic,
@@ -327,6 +400,35 @@ class QuizService:
 
         return result.get("questions", [])[:count]
 
+
+    """
+    FUNCTION CHECKPOINT:
+    DATA CHECKPOINT
+
+    Stage:
+        Topic Request
+            ↓
+        Note Retrieval
+
+    Input:
+        Topic and optional subtopic
+
+    Output:
+        Markdown note metadata
+
+    Used before:
+        Fact extraction
+
+    Must preserve:
+        - Source path
+        - Note content reference
+
+    Must not:
+        - Modify note content
+        - Generate knowledge
+    """
+    
+
     def _get_notes_for_topic(self, topic: str, subtopic: str) -> List[Dict[str, Any]]:
         topic_aliases = {
             "cloud computing": "Cloud",
@@ -352,9 +454,64 @@ class QuizService:
     ) -> List[Dict[str, Any]]:
         return sorted(notes, key=lambda x: x.get("content_length", 0), reverse=True)
 
+    """
+    FUNCTION CHECKPOINT:
+    DATA CHECKPOINT
+
+    Stage:
+
+        Raw Notes
+            ↓
+        FactExtractor
+            ↓
+        GroundingProcessor
+            ↓
+        Valid Facts
+
+    Input:
+        Retrieved notes
+
+    Output:
+        Grounded fact objects
+
+    Connected:
+        FactExtractor
+            ↓
+        GroundingProcessor
+
+    IMPORTANT:
+        Facts are the source of truth.
+
+    Must not:
+        - Invent missing facts
+        - Expand concepts beyond notes
+        - Let generated questions modify facts
+    """
+
     def _extract_facts_from_notes(
         self, notes: List[Dict[str, Any]], topic: str
     ) -> List[Dict[str, Any]]:
+
+        # ------------------------------------------------------------------
+        # Issue #1 fix: use the pre-built FactCache loaded at startup.
+        # QuizGenerator owns a FactCache that is fully loaded when the app
+        # starts.  Re-extracting facts from disk on every request was
+        # bypassing it entirely and causing unnecessary I/O + latency.
+        # Fall back to live extraction only when the cache is empty.
+        # ------------------------------------------------------------------
+        cached_facts = self.quiz_generator.fact_cache.get_facts(topic)
+        if cached_facts:
+            logger.info(
+                "FactCache hit: returning %d pre-built facts for topic '%s'",
+                len(cached_facts),
+                topic,
+            )
+            return cached_facts
+
+        logger.info(
+            "FactCache miss for topic '%s' — falling back to live extraction",
+            topic,
+        )
 
         extractor = FactExtractor()
         grounder = GroundingProcessor()
@@ -390,6 +547,42 @@ class QuizService:
 
         return extracted
 
+    """
+    FUNCTION CHECKPOINT:
+    GENERATION CHECKPOINT
+
+    Stage:
+
+        Valid Facts
+            ↓
+        QuizGenerator
+            ↓
+        Questions
+
+    Input:
+        Grounded facts
+
+    Output:
+        Generated questions
+
+    Connected:
+        Fact data
+            ↓
+        QuizGenerator
+            ↓
+        Question Validator
+
+    Must preserve:
+        - Answer grounding
+        - Fact relationship
+        - Topic alignment
+
+    Must not:
+        - Accept unsupported answers
+        - Replace source facts
+        - Bypass validation
+    """
+    
     def _generate_from_facts(
         self,
         facts: List[Dict[str, Any]],

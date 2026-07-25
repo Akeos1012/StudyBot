@@ -22,13 +22,23 @@ class DistractorSelector:
         if a == b:
             return True
 
-        # shared important words
-        a_words = set(a.replace("-", " ").split())
-        b_words = set(b.replace("-", " ").split())
+        # shared non-generic words
+        GENERIC_DOMAIN_WORDS = {
+            "cloud", "storage", "database", "data", "system", "systems",
+            "learning", "network", "networking", "service", "services",
+            "computing", "management", "architecture", "model", "algorithm", "type"
+        }
 
-        common = a_words & b_words
+        a_words = {
+            w for w in a.replace("-", " ").split()
+            if len(w) > 2 and w not in GENERIC_DOMAIN_WORDS
+        }
+        b_words = {
+            w for w in b.replace("-", " ").split()
+            if len(w) > 2 and w not in GENERIC_DOMAIN_WORDS
+        }
 
-        if common:
+        if a_words and b_words and a_words == b_words:
             return True
 
         return False

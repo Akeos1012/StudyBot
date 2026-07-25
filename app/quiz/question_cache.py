@@ -284,12 +284,9 @@ class QuestionCache:
         """
         pool = self.get_pool(topic, subtopic, difficulty, qtype)
 
-        if len(pool) < count:
-            logger.info(
-                f"Pool too small ({len(pool)} < {count}), caller should generate more"
-            )
+        if not pool:
+            logger.info("Pool empty")
             return None
-
 
         unused = [
             q for q in pool

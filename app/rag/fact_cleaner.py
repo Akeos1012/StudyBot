@@ -1,16 +1,50 @@
-"""
-Fact Cleaner Module
-
-Responsible for cleaning extracted facts before saving them into cache.
-
-Handles:
-- Encoding corruption
-- Markdown artifacts
-- Duplicate concept names inside definitions
-- Whitespace cleanup
-- Basic normalization
-"""
-
+# =====================================================
+# PIPELINE CHECKPOINT: FACT NORMALIZATION LAYER
+#
+# Position:
+#
+# Raw Extracted Fact
+#        ↓
+# FactCleaner
+#        ↓
+# Clean Fact Object
+#        ↓
+# FactCache
+#        ↓
+# Quiz Generation
+#
+# Purpose:
+# Normalizes extracted facts before persistent storage.
+#
+# Responsibilities:
+# - Fix encoding corruption
+# - Remove markdown artifacts
+# - Normalize whitespace
+# - Clean concept formatting
+# - Remove duplicate concept prefixes
+#
+# Connected Modules:
+#
+# Receives from:
+#   - app/rag/fact_extractor.py
+#
+# Used by:
+#   - app/rag/fact_cache.py
+#
+# Output:
+#   - Clean fact dictionary
+#
+# IMPORTANT RULES:
+#
+# - Never add new knowledge.
+# - Never rewrite meaning.
+# - Never summarize definitions.
+# - Only normalize formatting.
+#
+# Risk:
+# Aggressive cleaning can damage factual meaning.
+#
+# =====================================================
 import re
 from typing import Dict, Any, List
 
@@ -42,6 +76,38 @@ CAMEL_CASE_PATTERN = r"([a-z])([A-Z])"
 # PUBLIC FUNCTIONS
 # ============================================================================
 
+"""
+    FUNCTION CHECKPOINT:
+    TEXT NORMALIZATION
+
+    Stage:
+
+        Raw Text
+            ↓
+        Clean Text
+
+    Handles:
+        - Encoding repair
+        - Markdown removal
+        - Whitespace normalization
+        - Word boundary fixes
+
+    Input:
+        Raw extracted text
+
+    Output:
+        Normalized text
+
+    Must preserve:
+        - Meaning
+        - Technical terms
+        - Sentence information
+
+    Must not:
+        - Remove factual content
+        - Add explanations
+        - Change terminology
+"""
 
 def clean_text(text: str) -> str:
     """
@@ -134,17 +200,37 @@ def clean_text(text: str) -> str:
 
     return text.strip()
 
+"""
+    FUNCTION CHECKPOINT:
+    CONCEPT NORMALIZATION
+
+    Stage:
+
+        Extracted Concept
+              ↓
+        Canonical Concept Name
+
+    Handles:
+        - Formatting cleanup
+        - Separator removal
+        - Text normalization
+
+    Used before:
+        Fact storage
+
+    Must preserve:
+        - Concept identity
+        - Acronyms
+        - Technical naming
+
+    Must not:
+        - Rename concepts
+        - Classify concepts
+        - Validate concepts
+"""
 
 def clean_concept(concept: str) -> str:
-    """
-    Clean concept names.
 
-    Args:
-        concept: Raw concept string
-
-    Returns:
-        Cleaned concept string
-    """
     if not concept:
         return ""
 
@@ -155,6 +241,35 @@ def clean_concept(concept: str) -> str:
 
     return concept.strip()
 
+"""
+    FUNCTION CHECKPOINT:
+    DEFINITION NORMALIZATION
+
+    Stage:
+
+        Raw Definition
+              ↓
+        Clean Definition
+
+    Handles:
+        - Duplicate concept removal
+        - Formatting cleanup
+
+    Input:
+        Concept + extracted definition
+
+    Output:
+        Clean definition text
+
+    Must preserve:
+        - Original explanation
+        - Supporting information
+
+    Must not:
+        - Shorten meaning
+        - Generate missing information
+        - Rewrite explanation
+"""
 
 def clean_definition(concept: str, definition: str) -> str:
     """
@@ -199,6 +314,49 @@ def clean_definition(concept: str, definition: str) -> str:
 
     return definition.strip()
 
+
+"""
+    FUNCTION CHECKPOINT:
+    FACT FINALIZATION
+
+    Stage:
+
+        Extracted Fact
+              ↓
+        Normalized Fact
+              ↓
+        FactCache
+
+    Input:
+        Raw fact dictionary
+
+    Output:
+        Cache-ready fact dictionary
+
+    Cleans:
+        - Concept
+        - Definition
+        - Supporting fact
+
+    Connected:
+
+        FactExtractor
+              ↓
+        FactCleaner
+              ↓
+        FactCache
+
+    Must preserve:
+        - Fact ID
+        - Topic
+        - Source
+        - Concept meaning
+
+    Must not:
+        - Create facts
+        - Reject knowledge
+        - Modify truth
+"""
 
 def clean_fact(fact: Dict[str, Any]) -> Dict[str, Any]:
     """

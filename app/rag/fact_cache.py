@@ -98,12 +98,6 @@ class FactCache:
                 with open(self.cache_path, "r", encoding="utf-8") as f:
                     self.cache = json.load(f)
 
-                raw_facts = self.extractor.extract_all()
-
-                self.cache = {
-                    topic: clean_facts(facts) for topic, facts in raw_facts.items()
-                }
-
                 total_facts = sum(len(v) for v in self.cache.values())
                 print(f"✅ Loaded {total_facts} facts from cache")
 

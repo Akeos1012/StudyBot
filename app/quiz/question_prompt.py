@@ -11,7 +11,11 @@ Architecture Rule:
 
 
 def build_fact_question_prompt(
-    fact: str, answer: str, topic: str, style_hint: str = None
+    fact: str,
+    answer: str,
+    topic: str,
+    style_hint: str = None,
+    question_type: str = None
 ) -> str:
     """
     Build a grounded multiple-choice question generation prompt.
@@ -27,6 +31,30 @@ def build_fact_question_prompt(
     """
 
     style_instruction = ""
+
+    question_type_instruction = ""
+
+    if question_type:
+        question_type_instruction = f"""
+QUESTION TYPE:
+You MUST create a {question_type} style question.
+
+The question style controls the reasoning pattern:
+
+- definition: identify what the concept does
+- comparison: distinguish between similar concepts
+- application: apply the concept in a situation
+- scenario: describe a realistic usage case
+- relationship: test how concepts connect
+- recognition: identify the concept from unique properties
+- cause_effect: test why something happens
+- classification: identify category or type
+
+Do not always start with "Which technology".
+Change the reasoning pattern, not only the wording.
+
+Adapt the question reasoning to this style.
+"""
 
     if style_hint:
         style_instruction = f"""
@@ -53,6 +81,8 @@ TOPIC:
 {topic}
 
 {style_instruction}
+{question_type_instruction}
+
 
 Your task:
 Convert the FACT into a clear multiple-choice question.
@@ -84,77 +114,70 @@ STRICT RULES:
 
 2.5 Question Focus Rules
 
-Avoid using broader category terms in the question when they overlap with distractor choices.
+The question must focus ONLY on the TARGET CONCEPT.
+
+Rules:
+
+- Do not use information from related concepts.
+- Do not combine properties from different concepts.
+- Do not mention distractor concepts inside the question unless the FACT itself explains a relationship.
+
+The question must describe the unique characteristics of:
+
+"{answer}"
 
 Examples:
+
+TARGET:
+Block Storage
+
 Bad:
 "Which cloud storage technology uses fixed-size blocks?"
-(Gives away a broader category and makes Cloud Storage appear correct)
+Reason:
+This mixes Cloud Storage with Block Storage.
 
 Good:
-"Which storage technology manages data in fixed-size units called blocks?"
+"Which storage method organizes data into independent fixed-size blocks that can be accessed separately?"
 
-The question must describe the unique property of the TARGET CONCEPT, not its parent category.
+---
 
-   The question must clearly be about "{answer}".
+TARGET:
+Cloud Storage
 
-   The reader should know the TARGET CONCEPT is being described before reading the answer choices.
+Bad:
+"Which technology stores data in fixed-size blocks?"
+Reason:
+This describes Block Storage.
 
-   Do not describe only a generic feature shared by many concepts.
-   Use distinctive characteristics from the FACT that separate "{answer}" from related concepts.
+Good:
+"Which service stores digital files on remote servers and allows access through the internet?"
 
-   Example:
+---
 
-   TARGET CONCEPT:
-   Cloud Computing
+TARGET:
+Cloud Database
 
-   Bad:
-   "Which service allows users to store digital files on remote servers?"
-   (This describes Cloud Storage, not the complete Cloud Computing concept.)
+Bad:
+"Which technology stores data remotely like cloud services?"
+Reason:
+Too broad.
 
-   Good:
-   "Which technology provides computing resources such as storage, databases, and software over the internet?"
+Good:
+"Which service manages databases through cloud infrastructure instead of local servers?"
 
-   For named concepts and technologies:
+---
 
-   Prefer identifying the TARGET CONCEPT using its unique characteristics.
+Before generating the question:
 
-   Include "{answer}" in the question only when necessary to avoid ambiguity.
+1. Identify the unique property of "{answer}" from the FACT.
+2. Remove properties belonging to other concepts.
+3. Build the question using only those unique properties.
 
-   Do not replace the concept with a broader category.
+The reader should be able to identify the TARGET CONCEPT before seeing the answer choices.
 
-   Examples:
-
-   Bad:
-   "Which cloud storage technology uses fixed-size blocks?"
-   Reason:
-   Cloud Storage is a broader category and could also match.
-
-   Good:
-   "Which cloud storage technology stores files in fixed-size units called blocks?"
-
-   Bad:
-   "Which service stores data remotely?"
-   Reason:
-   Multiple concepts can match.
-
-   Good:
-   "Which technology stores data as independent blocks that can be accessed separately?"
-   - The question must still clearly identify "{answer}" and must not describe a broader category or a different concept.
-
-   Avoid writing overly generic questions that could describe many different concepts.
-
-   Good:
-   Which technology stores digital files on remote servers instead of local devices?
-
-   Good:
-   Cloud Storage is primarily designed for which purpose?
-
-   Bad:
-   Which technology stores files remotely?
-
-   Bad:
-   Which service manages data?
+Do not create comparison questions.
+Do not create "similar to" questions.
+Do not mention broader categories that can match multiple answers.
 
 3. The question must be answerable ONLY using the FACT.
 

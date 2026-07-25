@@ -21,18 +21,16 @@ import ollama
 from typing import List, Dict, Any, Optional
 import logging
 
-# Configure module logger
-logger = logging.getLogger(__name__)
-
+from app.config import settings
 
 # ============================================================================
 # CONSTANTS
 # ============================================================================
 
-DEFAULT_MODEL = "deepseek-r1:1.5b"
-DEFAULT_TEMPERATURE = 0.3
-DEFAULT_TOP_P = 0.8
-DEFAULT_NUM_PREDICT = 800
+DEFAULT_MODEL = getattr(settings, "LLM_MODEL", "qwen2.5:3b")
+DEFAULT_TEMPERATURE = getattr(settings, "LLM_TEMPERATURE", 0.3)
+DEFAULT_TOP_P = getattr(settings, "LLM_TOP_P", 0.7)
+DEFAULT_NUM_PREDICT = getattr(settings, "LLM_NUM_PREDICT", 800)
 
 
 # ============================================================================

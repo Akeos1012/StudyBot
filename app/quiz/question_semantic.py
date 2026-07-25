@@ -1,11 +1,55 @@
-"""
-Semantic validation for generated quiz questions.
-
-This module checks:
-- redundant options
-- explanation consistency
-- garbled text
-"""
+# =====================================================
+# PIPELINE CHECKPOINT: QUESTION SEMANTIC VALIDATION LAYER
+#
+# Position:
+#
+# Fact
+#   ↓
+# QuizGenerator
+#   ↓
+# QuestionValidator
+#   ↓
+# SemanticValidator  ← HERE
+#   ↓
+# QuestionCache
+#   ↓
+# User Quiz
+#
+# Purpose:
+# Detect quality problems in generated questions.
+#
+# Responsibilities:
+# - Detect duplicate/redundant options
+# - Verify explanation supports answer
+# - Reject corrupted text
+# - Prevent inconsistent outputs
+#
+# Connected Modules:
+#
+# Receives from:
+#   - app/quiz/quiz_generator.py
+#   - app/quiz/question_validator.py
+#
+# Uses:
+#   - options_parser.py
+#   - question_constants.py
+#
+# Output:
+#   True  → question passes semantic checks
+#   False → question rejected
+#
+# IMPORTANT RULES:
+#
+# - Does not create questions.
+# - Does not modify answers.
+# - Does not fix bad generation.
+# - Only accepts or rejects output.
+#
+# Risk:
+# Weak validation allows confusing quizzes.
+# Overly strict rules reduce question coverage.
+#
+# =====================================================
 
 import logging
 import re
@@ -20,6 +64,35 @@ from .question_constants import GENERIC_PHRASES
 
 logger = logging.getLogger(__name__)
 
+"""
+    FUNCTION CHECKPOINT:
+    OPTION QUALITY GATE
+
+    Stage:
+
+        Generated Options
+              ↓
+        Redundancy Check
+
+    Detects:
+        - Duplicate options
+        - Nested options
+        - Overlapping meanings
+
+    Input:
+        Multiple choice options
+
+    Output:
+        True = invalid options
+
+    Must prevent:
+        - Multiple possible answers
+        - Obvious duplicates
+
+    Must not:
+        - Change option text
+        - Select correct answer
+"""
 
 def has_redundant_options(options: list[str]) -> bool:
     """Check if one option contains another option."""
@@ -43,6 +116,35 @@ def has_redundant_options(options: list[str]) -> bool:
 
     return False
 
+"""
+    FUNCTION CHECKPOINT:
+    EXPLANATION CONSISTENCY GATE
+
+    Stage:
+
+        Question Output
+              ↓
+        Explanation Validation
+
+    Checks:
+        - Explanation supports marked answer
+        - Explanation does not favor another option
+        - Explanation is not empty or generic
+
+    Input:
+        Generated question object
+
+    Output:
+        True = explanation failure
+
+    Must preserve:
+        - Correct answer relationship
+        - Explanation grounding
+
+    Must not:
+        - Rewrite explanations
+        - Change answers
+"""
 
 def explanation_contradicts_answer(question: dict) -> bool:
     """Check if the explanation text actually supports the marked-correct option."""
@@ -130,6 +232,34 @@ def explanation_contradicts_answer(question: dict) -> bool:
             return True
     return False
 
+"""
+    FUNCTION CHECKPOINT:
+    TEXT INTEGRITY CHECK
+
+    Stage:
+
+        Generated Text
+              ↓
+        Character Validation
+
+    Detects:
+        - Control characters
+        - Broken encoding
+        - Corrupted output
+
+    Input:
+        Any generated text
+
+    Output:
+        True = corrupted text
+
+    Must not:
+        - Normalize text
+        - Repair content
+
+    Cleaning belongs to:
+        - Data normalization layers
+"""
 
 def has_garbled_text(text: str) -> bool:
     """Check if text contains non-printable or control characters."""
@@ -137,6 +267,40 @@ def has_garbled_text(text: str) -> bool:
         return True
     return bool(re.search(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", text))
 
+"""
+    FUNCTION CHECKPOINT:
+    VALIDATION PIPELINE GATE
+
+    Stage:
+
+        Generated Question
+              ↓
+        Semantic Checks
+              ↓
+        Accepted Question
+
+    Runs:
+        1. Option redundancy check
+        2. Explanation consistency
+        3. Text corruption check
+
+    Connected:
+
+        QuizGenerator
+             ↓
+        QuestionValidator
+             ↓
+        Semantic Validator
+
+    Returns:
+        True  = safe for next stage
+        False = reject question
+
+    Must not:
+        - Generate replacements
+        - Modify question data
+        - Bypass failed checks
+"""
 
 def validate_semantic(question: Dict) -> bool:
     """

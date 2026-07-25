@@ -212,9 +212,10 @@ class FillBlankGenerator:
                 "type": "fill_blank",
                 "supporting_fact": definition,
                 "concept": concept,
-                "source_note": fact_data.get(
-                    "source_note",
-                    "inline"
+                "source_note": (
+                    fact_data.get("source_note")
+                    or fact_data.get("source")
+                    or "inline"
                 ),
                 "fact_id": fact_data.get(
                     "fact_id",

@@ -60,17 +60,76 @@ def validate_grounding(
         "containerization": [
             "container",
             "containers",
-            "application dependencies",
-            "run consistently",
-            "package applications"
+            "package",
+            "packages",
+            "dependencies",
+            "runtime",
+            "configuration",
+            "isolated",
+            "deployment",
+            "consistent"
         ],
+
         "cloud computing": [
-            "computing services",
+            "computing",
             "storage",
             "databases",
             "software",
-            "internet"
+            "internet",
+            "remote",
+            "resources"
         ],
+    }
+
+    TOPIC_CONCEPT_RELATIONS = {
+        "cloud": {
+            "containerization",
+            "cloud storage",
+            "cloud database",
+            "cloud computing",
+            "virtualization",
+            "serverless",
+            "edge computing",
+            "kubernetes",
+            "docker",
+            "block storage",
+            "object storage",
+        },
+
+        "networking": {
+            "routing",
+            "switching",
+            "tcp",
+            "ip",
+            "dns",
+            "firewall",
+            "vpn",
+        },
+
+        "database": {
+            "sql",
+            "mysql",
+            "nosql",
+            "normalization",
+            "transaction",
+            "indexing",
+        },
+
+        "security": {
+            "encryption",
+            "authentication",
+            "authorization",
+            "firewall",
+            "malware",
+        },
+
+        "programming": {
+            "function",
+            "class",
+            "object",
+            "inheritance",
+            "polymorphism",
+        },
     }
 
     # Level 1: Exact answer appears
@@ -107,17 +166,13 @@ def validate_grounding(
 
         overlap = len(matched) / len(meaningful_words)
 
-        if overlap >= 0.50:
+        if overlap >= 0.30 and len(matched) >= 2:
             logger.debug(
-                "Grounding keyword overlap %.2f",
+                "Grounding keyword overlap %.2f (%d matches)",
                 overlap,
+                len(matched),
             )
             return True
-
-    # Description fallback:
-    # Accept only if answer concept appears in the supporting fact.
-    if correct_lower in context_lower:
-        return True
 
     # Level 3: Multi-word phrase matching (at least 60% of words appear together)
     if len(correct_words) >= 2:
@@ -140,7 +195,7 @@ def validate_grounding(
 
                 overlap = len(matched_words) / len(meaningful_correct_words)
 
-                if overlap >= 0.50:
+                if overlap >= 0.75 and len(matched_words) >= 2:
                     return True
 
     log_validation_failure(
@@ -167,30 +222,36 @@ def explanation_supported_by_fact(
     if not explanation or not supporting_fact:
         return False
 
-    explanation = explanation.lower()
-    fact = supporting_fact.lower()
-    correct = correct_text.lower()
+    exp_lower = explanation.lower()
+    fact_lower = supporting_fact.lower()
+    correct_lower = correct_text.lower()
 
-    # Explanation should mention the correct concept.
-    if correct not in explanation:
+    # Explanation should mention the correct concept or concept root stem
+    correct_words = [w for w in correct_lower.split() if len(w) >= 3 and w not in STOP_WORDS]
+    concept_in_exp = correct_lower in exp_lower or any(
+        w in exp_lower or (len(w) >= 5 and w[:5] in exp_lower)
+        for w in correct_words
+    )
+    if not concept_in_exp:
         return False
 
     fact_words = {
-        w for w in re.findall(r"\w+", fact)
+        w for w in re.findall(r"\w+", fact_lower)
         if len(w) > 3 and w not in STOP_WORDS
     }
 
     explanation_words = {
-        w for w in re.findall(r"\w+", explanation)
+        w for w in re.findall(r"\w+", exp_lower)
         if len(w) > 3 and w not in STOP_WORDS
     }
 
-    if not fact_words:
+    if not fact_words or not explanation_words:
         return False
 
-    overlap = len(fact_words & explanation_words) / len(fact_words)
+    common = fact_words & explanation_words
+    overlap = len(common) / len(explanation_words)
 
-    return overlap >= 0.30
+    return overlap >= 0.30 or len(common) >= 2
 
 def is_valid_explanation(
     explanation: str,

@@ -1,6 +1,52 @@
+# ============================================================================
+# MODULE: QuizGenerator
+# LOCATION: app/quiz/quiz_generator.py
+#
+# PIPELINE POSITION:
+#
+# FactCache
+#    |
+#    v
+# QuizGenerator
+#    |
+#    +--> LLMClient (question wording only)
+#    |
+#    +--> Validation Pipeline
+#    |
+#    +--> QuestionCache
+#
+# MAIN PURPOSE:
+# Converts trusted extracted FACTS into quiz questions.
+#
+# CORE RULE:
+# The LLM does NOT create knowledge.
+# The LLM only transforms existing facts into question format.
+#
+# INPUT:
+# - Extracted facts from RAG pipeline
+# - Topic
+# - Question count
+#
+# OUTPUT:
+# - Validated quiz questions
+#
+# IMPORTANT DEPENDENCIES:
+# - fact_cache.py       -> source of truth
+# - retriever.py        -> retrieves supporting facts
+# - llm_client.py       -> generates wording
+# - question_validator -> rejects invalid questions
+# - question_grounding -> verifies fact alignment
+# - question_scorer    -> quality evaluation
+# - question_cache     -> stores accepted questions
+#
+# AUDIT STATUS:
+# CORE MODULE - modify carefully
+# ============================================================================
+
 import json
 import re
 import time
+
 from difflib import SequenceMatcher
 from json_repair import repair_json
 from typing import List, Dict, Any, Optional, Tuple
@@ -11,6 +57,8 @@ from .question_cache import QuestionCache
 from .question_scorer import QuestionScorer
 from .question_similarity import is_similar_to_pool
 from .question_prompt import build_fact_question_prompt
+from .question_types import QuestionType
+from .question_diversity import select_question_type
 from ..rag.fact_cache import FactCache
 from .llm_parser import LLMParser
 from .llm_client import LLMClient
@@ -54,7 +102,18 @@ from ..rag.retriever import Retriever
 
 
 # ============================================================================
-# CONSTANTS
+# CONSTANTS / VALIDATION RULES
+#
+# These rules prevent:
+#
+# - generic concepts
+# - hallucinated concepts
+# - structural answers
+# - duplicate questions
+#
+# Used mainly by:
+# - QuizGenerator.generate_from_fact()
+# - QuizGenerator.generate_questions()
 # ============================================================================
 
 # Banned layer phrases that indicate structural rather than factual content
@@ -93,9 +152,25 @@ MIN_QUALITY_SCORE = settings.MIN_QUALITY_SCORE
 DEFAULT_MAX_ATTEMPTS = settings.MAX_GENERATION_RETRIES
 DEFAULT_MODEL = settings.LLM_MODEL
 
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
+# PIPELINE CHECKPOINT:
+# Validation Stage:
+# Question uniqueness filtering
+#
+# CONNECTED MODULES:
+# - question_similarity.py
+# - question_cache.py
+#
+# USED BY:
+# - QuizGenerator.generate_questions()
+#
+# RESPONSIBILITY:
+# Removes duplicate questions before caching or returning results.
+#
+# DOES NOT:
+# - generate questions
+# - validate correctness
+# - modify facts
+
 
 def filter_similar_questions(
     questions: List[Dict[str, Any]],
@@ -183,7 +258,38 @@ def sanitize_supporting_fact(supporting_fact: str, concept: str) -> Optional[str
 
 
 # ============================================================================
-# QUIZ GENERATOR CLASS
+# CORE PIPELINE CONTROLLER
+#
+# This class connects:
+#
+# RAG FACTS
+#    |
+#    v
+# PROMPT BUILDER
+#    |
+#    v
+# LLM GENERATION
+#    |
+#    v
+# PARSER
+#    |
+#    v
+# VALIDATION PIPELINE
+#    |
+#    v
+# QUESTION CACHE
+#
+# This is the main orchestration layer of quiz generation.
+#
+# It should NOT:
+# - extract facts
+# - clean markdown
+# - define fact schemas
+#
+# It SHOULD:
+# - coordinate generation
+# - enforce validation order
+# - reject invalid outputs
 # ============================================================================
 
 class QuizGenerator:
@@ -194,6 +300,21 @@ class QuizGenerator:
     knowledge, answers, or concepts. All questions are validated against
     their source facts before being returned.
     """
+
+# INITIALIZATION CHECKPOINT:
+#
+# Creates all services required for question generation.
+#
+# Creates:
+# - LLM connection
+# - Fact storage access
+# - Retriever
+# - Parser
+# - Scorer
+# - Distractor generator
+#
+# If this breaks:
+# Quiz generation pipeline cannot start.
 
     def __init__(
         self,
@@ -265,10 +386,31 @@ class QuizGenerator:
 
         return is_acceptable, score, scores
 
-    # =========================================================================
-    # FACT-BASED GENERATION
-    # =========================================================================
-    
+# GENERATION CHECKPOINT:
+#
+# PURPOSE:
+# Retry failed question generation.
+#
+# FLOW:
+#
+# FACT
+#  |
+#  v
+# generate_from_fact()
+#  |
+#  v
+# validation
+#
+# Failure:
+# retry
+#
+# Success:
+# return question
+#
+# CONNECTED:
+# - generate_from_fact()
+# - validation_logger
+# - quiz_metrics
     
     def generate_with_retry(
         self,
@@ -303,6 +445,48 @@ class QuizGenerator:
                     metrics.llm_retry_count += 1
 
             self._supporting_facts = supporting_facts or []
+
+
+# MAIN GENERATION PIPELINE CHECKPOINT
+#
+# Converts one trusted FACT into one validated question.
+#
+# FULL FLOW:
+#
+# Fact
+#  |
+#  v
+# Sanitize fact
+#  |
+#  v
+# Build prompt
+#  |
+#  v
+# LLM generates wording
+#  |
+#  v
+# Parse JSON
+#  |
+#  v
+# Add distractors
+#  |
+#  v
+# Validation Pipeline:
+#
+# 1. Structure
+# 2. Distractors
+# 3. Grounding
+# 4. Topic relevance
+# 5. Focus
+# 6. Semantic
+# 7. Domain correctness
+# 8. Quality score
+#
+# Output:
+# Accepted question OR None
+#
+# IMPORTANT:
+# This function is the main hallucination barrier.
 
             question = self.generate_from_fact(
                 fact,
@@ -399,11 +583,17 @@ class QuizGenerator:
             return None
 
         # Build prompt
+        question_style = select_question_type()
+
         prompt = build_fact_question_prompt(
             fact_for_prompt,
             answer,
             topic,
-            style_hint="The correct answer must appear explicitly or be directly described in the FACT. Never use related concepts that are not mentioned."
+            style_hint=f"""
+        The correct answer must appear explicitly or be directly described in the FACT.
+        Never use related concepts that are not mentioned.
+        """,
+            question_type=question_type
         )
 
         try:
@@ -465,6 +655,14 @@ class QuizGenerator:
 
             question["type"] = "multiple_choice"
 
+            # Propagate fact metadata onto question object
+            question["topic"] = question.get("topic") or fact_data.get("topic") or topic
+            question["subtopic"] = question.get("subtopic") or fact_data.get("subtopic") or ""
+            question["source_note"] = question.get("source_note") or fact_data.get("source_note") or fact_data.get("source") or ""
+            question["fact_id"] = question.get("fact_id") or fact_data.get("fact_id") or ""
+            question["concept_type"] = question.get("concept_type") or fact_data.get("concept_type") or "concept"
+            question["concept"] = question.get("concept") or fact_data.get("concept") or answer
+
             # ===== VALIDATION PIPELINE =====
 
             # Stage 1: Structure
@@ -490,7 +688,9 @@ class QuizGenerator:
                 question.get('question', ''),
                 topic,
                 answer,
-                sanitized_supporting_fact
+                sanitized_supporting_fact,
+                fact_topic=fact_data.get("topic", ""),
+                concept=fact_data.get("concept", "")
             ):
                 return None
 
@@ -560,9 +760,35 @@ class QuizGenerator:
             traceback.print_exc()
             raise
 
-    # =========================================================================
-    # MULTIPLE CHOICE GENERATION
-    # =========================================================================
+# HIGH LEVEL GENERATION ENTRY POINT
+#
+# Called by:
+# quiz_service.py
+#
+# RESPONSIBILITY:
+# Generate requested number of questions for a topic.
+#
+# FLOW:
+#
+# Topic
+#  |
+#  v
+# Fact list
+#  |
+#  v
+# generate_with_retry()
+#  |
+#  v
+# validate
+#  |
+#  v
+# cache
+#  |
+#  v
+# API response
+#
+# This function manages batches.
+# generate_from_fact() manages individual questions.
 
     def generate_questions(
         self,
@@ -596,13 +822,24 @@ class QuizGenerator:
             qtype="multiple_choice",
         )
 
-        if cached_questions and len(cached_questions) >= count:
-            print(f"📦 Cache hit ({len(cached_questions)} questions, pool={pool_size})")
-            return {"questions": cached_questions}
+        if cached_questions:
+            print(
+                f"📦 Cache retrieved ({len(cached_questions)} questions, pool={pool_size})"
+            )
 
-        print(f"📦 Cache insufficient (pool={pool_size}), generating more...")
+            if len(cached_questions) >= count:
+                # Issue #2 fix: cache has sufficient questions — return them
+                # directly.  Previously this branch discarded the cache and
+                # forced a full LLM generation on every call ("bypassed for
+                # testing").
+                return {"questions": cached_questions[:count]}
 
-        print("📦 Cache miss. Generating new questions...")
+            remaining = count - len(cached_questions)
+
+        else:
+            remaining = count
+
+        # Cache is insufficient — generate the remaining questions via LLM.
 
         # ===== HALLUCINATION PREVENTION =====
         # Facts are the ONLY source of truth. No raw context is ever sent to the LLM.
@@ -614,7 +851,7 @@ class QuizGenerator:
         
         # Process up to 3x requested count for filtering
         generation_pool = supporting_facts * settings.FACT_MULTIPLIER
-        for fact_data in generation_pool[:count * settings.FACT_MULTIPLIER]:
+        for fact_data in generation_pool[:remaining * settings.FACT_MULTIPLIER]:
             if not isinstance(fact_data, dict):
                 continue
 
@@ -624,12 +861,15 @@ class QuizGenerator:
             if not concept or not definition:
                 continue
 
+            question_type = select_question_type()
+
             question = self.generate_with_retry(
                 fact=definition,
                 answer=concept,
                 topic=topic,
                 fact_data=fact_data,
                 supporting_facts=supporting_facts,
+                question_type=question_type,
             )
 
             # Skip fact if fill blank generation failed
@@ -718,7 +958,16 @@ class QuizGenerator:
 
             print(f"💾 Added result: {result}")
 
-        return {"questions": valid_questions}
+        combined_questions = []
+
+        if cached_questions:
+            combined_questions.extend(cached_questions)
+
+        combined_questions.extend(valid_questions)
+
+        return {
+            "questions": combined_questions[:count]
+        }
 
     # =========================================================================
     # FILL-IN-THE-BLANK GENERATION

@@ -1,15 +1,104 @@
 """
-Shared text normalization utilities.
+MODULE: Text Normalizer
+
+LOCATION:
+app/quiz/text_normalizer.py
+
+
+PIPELINE POSITION:
+
+Obsidian Note
+      |
+      v
+FactExtractor
+      |
+      v
+Raw Supporting Fact
+      |
+      v
+TextNormalizer
+      |
+      +----------------------+
+      |                      |
+      v                      v
+QuestionGrounding     QuestionExplanation
+
+
+MAIN PURPOSE:
+
+Normalize supporting facts before they are used for:
+- grounding validation
+- explanation generation
+
+This module only cleans text.
+
+It NEVER:
+- generates questions
+- changes meaning
+- invents facts
+- performs validation
+
+
+INPUT:
+Raw supporting fact string
+
+OUTPUT:
+Clean supporting fact string
+
+
+CONNECTED MODULES:
 
 Used by:
 - question_grounding.py
 - question_explanation.py
 
-Responsible only for cleaning text fragments.
+Dependencies:
+- Python re module only
+
+
+AUDIT STATUS:
+CORE SHARED UTILITY
+Changes affect multiple validation modules.
 """
 
 import re
 
+
+# ============================================================================
+# TEXT NORMALIZATION CHECKPOINT
+#
+# Purpose:
+# Convert raw extracted note fragments into clean supporting facts.
+#
+# Pipeline:
+#
+# Obsidian Note
+#      |
+#      v
+# FactExtractor
+#      |
+#      v
+# normalize_supporting_fact()
+#      |
+#      v
+# Grounding / Explanation
+#
+# Responsibilities:
+# - fix encoding artifacts
+# - repair merged words
+# - remove markdown
+# - remove Obsidian syntax
+# - normalize whitespace
+# - reject obvious non-facts
+#
+# Important:
+# This function should preserve the original meaning.
+# It cleans formatting only.
+#
+# Connected:
+# - question_grounding.py
+# - question_explanation.py
+# ============================================================================
 
 def normalize_supporting_fact(text: str) -> str:
 
@@ -23,9 +112,8 @@ def normalize_supporting_fact(text: str) -> str:
         .replace("â", "")
     )
 
-    """
-    Turn a raw note fragment into a short atomic supporting fact.
-    """
+    # Repair common UTF-8/Windows encoding artifacts that appear after
+    # note extraction or file conversion.
 
     if not text:
         return ""
@@ -50,6 +138,9 @@ def normalize_supporting_fact(text: str) -> str:
     cleaned = re.sub(r"(?i)\b(data)(access)", r"\1 \2", cleaned)
     cleaned = re.sub(r"(?i)\b(an)(application)", r"\1 \2", cleaned)
     cleaned = re.sub(r"(?i)\b(remote)(servers)", r"\1 \2", cleaned)
+
+    # Repair words accidentally joined together during extraction.
+    # These corrections improve downstream grounding accuracy.
 
     # Fix common merged words:
     # traditionalfiles -> traditional files
@@ -79,6 +170,8 @@ def normalize_supporting_fact(text: str) -> str:
             cleaned
         )
 
+    # Remove Markdown and Obsidian formatting so only plain text remains.
+
     # Remove markdown headings
     cleaned = re.sub(r"^\s*#+\s*", "", cleaned)
 
@@ -98,7 +191,7 @@ def normalize_supporting_fact(text: str) -> str:
     # Normalize spaces
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
-    # Remove repeated concept definition starters
+    # Remove repetitive definition prefixes while preserving the factual content.
     cleaned = re.sub(
         r"^(a|an)\s+[a-z]+(?:\s+[a-z]+)?\s+(refers to|is|are|means)\s+",
         "",
@@ -119,10 +212,10 @@ def normalize_supporting_fact(text: str) -> str:
     ):
         return ""
 
-    # Do not truncate here.
-    # Explanation and grounding require the full supporting fact.
 
-    # Reject non-facts
+    # Reject headings, summaries, questions, and other note sections
+    # that are not atomic factual statements.
+    
     if cleaned.lower().startswith(
         (
             "how ",

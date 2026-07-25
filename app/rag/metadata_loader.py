@@ -1,19 +1,57 @@
-"""
-Metadata Loader Module - Clean metadata indexing service for Obsidian vaults.
-
-This module is responsible ONLY for:
-- Indexing markdown files in a vault
-- Loading and caching metadata
-- Providing efficient note content retrieval
-
-It does NOT handle:
-- Fact extraction
-- Quiz generation
-- Embeddings or retrieval
-- Grounding or validation
-
-The module is designed to be production-ready and extensible for large vaults.
-"""
+# =====================================================
+# PIPELINE CHECKPOINT: METADATA DATA LAYER
+#
+# Position:
+#
+# Obsidian Vault (.md)
+#        ↓
+# MetadataLoader
+#        ↓
+# Note Metadata + Content
+#        ↓
+# FactExtractor
+#        ↓
+# Quiz Pipeline
+#
+# Purpose:
+# Provides indexed access to markdown notes.
+#
+# Responsibilities:
+# - Discover markdown files
+# - Extract note metadata
+# - Cache file information
+# - Detect file changes
+# - Provide note content retrieval
+#
+# Connected Modules:
+#
+# Used by:
+#   - app/services/quiz_service.py
+#
+# Feeds:
+#   - app/rag/fact_extractor.py
+#
+# Output:
+#   - note path
+#   - topic
+#   - subtopic
+#   - title
+#   - content length
+#   - cleaned note content
+#
+# IMPORTANT RULES:
+#
+# - Notes are the original source material.
+# - Never modify note content here.
+# - Never extract facts here.
+# - Never generate knowledge here.
+# - Never apply quiz logic here.
+#
+# Risk:
+# Changes to indexing or caching can affect
+# the entire RAG pipeline.
+#
+# =====================================================
 
 import json
 import hashlib
@@ -73,26 +111,49 @@ class CacheSaveError(MetadataLoaderError):
 # MAIN CLASS
 # ============================================================================
 
+    """
+    CHECKPOINT:
+    Note indexing gateway
 
+    Receives:
+        Obsidian markdown vault
+
+    Returns:
+        Searchable note metadata
+        Clean note content
+
+    Pipeline:
+
+        Markdown Files
+              ↓
+        Metadata Index
+              ↓
+        Cached Notes
+              ↓
+        Fact Extraction
+
+    Connected:
+        QuizService
+            ↓
+        FactExtractor
+
+    Handles:
+        - File discovery
+        - Metadata parsing
+        - Content loading
+        - Cache invalidation
+
+    Must not:
+        - Extract facts
+        - Rank knowledge importance
+        - Generate questions
+        - Validate answers
+
+    Risk:
+        Breaking metadata format can break
+        downstream fact extraction.
+    """
 class MetadataLoader:
-    """
-    Metadata indexing service for Obsidian vaults.
-
-    This class manages metadata for markdown files in a vault,
-    providing efficient access to note metadata and content.
-
-    Features:
-    - Lazy loading of full note contents
-    - In-memory note caching
-    - File modification detection for cache invalidation
-    - Topic and subtopic organization
-
-    Usage:
-        loader = MetadataLoader("sample_notes")
-        metadata = loader.load_metadata()
-        content = loader.get_note_content("path/to/note.md")
-        notes = loader.get_notes_by_topic("Cloud")
-    """
 
     def __init__(self, notes_path: str = DEFAULT_NOTES_PATH):
         """
@@ -111,6 +172,39 @@ class MetadataLoader:
     # =========================================================================
     # PUBLIC API
     # =========================================================================
+
+    """
+    FUNCTION CHECKPOINT:
+    DATA CHECKPOINT
+
+    Stage:
+
+        Markdown Vault
+             ↓
+        Metadata Index
+
+    Input:
+        Vault directory
+
+    Output:
+        Note metadata list
+
+    Handles:
+        - Cache loading
+        - Index rebuilding
+        - File change detection
+
+    Must preserve:
+        - File path
+        - Topic
+        - Subtopic
+        - Metadata fields
+
+    Must not:
+        - Parse learning concepts
+        - Create facts
+        - Modify notes
+    """
 
     def load_metadata(self, force_rebuild: bool = False) -> List[Dict[str, Any]]:
         """
@@ -135,6 +229,35 @@ class MetadataLoader:
             self._save_metadata_cache()
 
         return self.metadata
+
+    """
+    FUNCTION CHECKPOINT:
+    DATA CHECKPOINT
+
+    Stage:
+
+        Markdown File
+             ↓
+        Clean Text Content
+
+    Input:
+        Note file path
+
+    Output:
+        Markdown content without frontmatter
+
+    Used by:
+        FactExtractor
+
+    Must preserve:
+        - Original note meaning
+        - Text information
+
+    Must not:
+        - Summarize content
+        - Remove knowledge
+        - Add explanations
+    """
 
     def get_note_content(self, note_path: str) -> str:
         """
@@ -417,6 +540,29 @@ class MetadataLoader:
     # PRIVATE HELPERS - INDEXING
     # =========================================================================
 
+    """
+    FUNCTION CHECKPOINT:
+    INDEX BUILDING
+
+    Stage:
+
+        Markdown Files
+              ↓
+        Metadata Cache
+
+    Creates:
+        Searchable note index
+
+    Connected:
+        File system
+            ↓
+        Metadata Cache
+
+    Risk:
+        Incorrect indexing can cause
+        missing notes during retrieval.
+    """
+    
     def _build_metadata_index(self) -> List[Dict[str, Any]]:
         """
         Build metadata index from scratch.
@@ -455,6 +601,32 @@ class MetadataLoader:
         for ext in MARKDOWN_EXTENSIONS:
             md_files.extend(self.notes_path.glob(f"**/*{ext}"))
         return md_files
+
+    """
+    FUNCTION CHECKPOINT:
+    DATA TRANSFORMATION
+
+    Stage:
+
+        Raw Markdown File
+              ↓
+        Structured Metadata
+
+    Extracts:
+        - Topic
+        - Subtopic
+        - Title
+        - File path
+        - Content length
+
+    Output:
+        Metadata dictionary
+
+    Must not:
+        - Extract facts
+        - Analyze concepts
+        - Determine importance
+    """
 
     def _extract_metadata(self, md_file: Path) -> Optional[Dict[str, Any]]:
         """

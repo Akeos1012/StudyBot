@@ -1,9 +1,92 @@
+"""
+MODULE: Validation Logger
+
+LOCATION:
+app/quiz/validation_logger.py
+
+
+PIPELINE POSITION:
+
+Question Validation
+        |
+        +----------------------+
+        |                      |
+        v                      v
+Validation Logger      Quiz Metrics
+        |
+        v
+Debug Logs
+
+
+MAIN PURPOSE:
+
+Provide centralized logging for validation failures.
+
+This module records:
+- rejection reason
+- validation stage
+- failed question
+- metrics
+
+It does NOT:
+- validate questions
+- modify questions
+- generate questions
+
+
+INPUT:
+Validation failure information
+
+OUTPUT:
+- Log messages
+- Updated quiz metrics
+
+
+CONNECTED MODULES:
+
+Used by:
+- quiz_generator.py
+- question_validator.py
+- question_grounding.py
+- question_semantic.py
+- domain_validator.py
+
+Connected to:
+- quiz_metrics.py
+
+
+AUDIT STATUS:
+SHARED LOGGING UTILITY
+Changing behavior affects every validation module.
+"""
+
 import logging
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# GLOBAL METRICS TRACKER
+#
+# Stores the active QuizMetrics instance so every validation
+# module can report failures without directly depending on
+# QuizMetrics.
+#
+# Acts as a shared reporting channel.
+# ============================================================================
+
 _current_metrics = None
 
+# ============================================================================
+# METRICS REGISTRATION CHECKPOINT
+#
+# Called once at the start of quiz generation.
+#
+# Registers the active QuizMetrics object so validation
+# modules can record failures.
+#
+# Connected:
+# quiz_service.py
+# ============================================================================
 
 def set_metrics(metrics):
     """
@@ -14,6 +97,16 @@ def set_metrics(metrics):
 
     _current_metrics = metrics
 
+# ============================================================================
+# METRICS ACCESS CHECKPOINT
+#
+# Returns the currently active QuizMetrics object.
+#
+# Used by:
+# - quiz_generator.py
+# - retry tracking
+# - validation pipeline
+# ============================================================================
 
 def get_metrics():
     """
@@ -22,7 +115,39 @@ def get_metrics():
 
     return _current_metrics
 
-
+# ============================================================================
+# VALIDATION FAILURE CHECKPOINT
+#
+# Central logging function for every rejected question.
+#
+# Responsibilities:
+# - record rejection stage
+# - record rejection reason
+# - update QuizMetrics
+# - write debug information
+#
+# Pipeline:
+#
+# Validation Module
+#        |
+#        v
+# log_validation_failure()
+#        |
+#        +--> Logger
+#        |
+#        +--> QuizMetrics
+#
+# Important:
+# This function never rejects questions itself.
+# It only records why another module rejected them.
+#
+# Connected:
+# - question_validator.py
+# - question_grounding.py
+# - question_semantic.py
+# - domain_validator.py
+# - quiz_generator.py
+# ============================================================================
 
 def log_validation_failure(
     question: dict,

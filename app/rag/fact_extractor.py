@@ -1,3 +1,58 @@
+# =====================================================
+# PIPELINE CHECKPOINT: FACT EXTRACTION DATA LAYER
+#
+# Position:
+#
+# Obsidian Notes
+#        ↓
+# MetadataLoader
+#        ↓
+# FactExtractor
+#        ↓
+# FactSchema Validation
+#        ↓
+# FactCache
+#        ↓
+# Quiz Generation
+#
+# Purpose:
+# Converts raw note content into validated atomic facts.
+#
+# Responsibilities:
+# - Clean markdown text
+# - Detect valid concepts
+# - Reject structural noise
+# - Build atomic facts
+# - Assign concept types
+# - Attach source references
+#
+# Connected Modules:
+#
+# Receives from:
+#   - app/services/quiz_service.py
+#   - app/rag/metadata_loader.py
+#
+# Uses:
+#   - app/models/fact_schema.py
+#   - app/rag/fact_cleaner.py
+#
+# Outputs:
+#   - Structured fact dictionaries
+#
+# IMPORTANT RULES:
+#
+# - Facts are the source of truth.
+# - Extraction must never invent knowledge.
+# - Precision is preferred over recall.
+# - Invalid concepts must be rejected.
+# - Source text must remain traceable.
+#
+# Risk:
+# Weak extraction rules create bad quiz questions.
+# Overly strict rules remove useful knowledge.
+#
+# =====================================================
+
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -174,20 +229,47 @@ class HeadingFilter:
 # SEMANTIC CONCEPT EXTRACTOR
 # =============================================================================
 
+    """
+    CHECKPOINT:
+    Concept Recognition Gate
+
+    Receives:
+        Cleaned note sentences
+
+    Returns:
+        Valid concept name
+
+    Pipeline:
+
+        Sentence
+            ↓
+        Pattern Detection
+            ↓
+        Concept Validation
+            ↓
+        Normalized Concept
+
+    Connected:
+        ConceptValidator
+            ↓
+        FactExtractor
+
+    Must reject:
+        - Sentence fragments
+        - Verb phrases
+        - Section titles
+        - Generic words
+
+    Must preserve:
+        - Technical concepts
+        - Acronyms
+        - Domain terminology
+
+    Risk:
+        Bad concepts create incorrect quiz answers.
+    """
 
 class SemanticConceptExtractor:
-    """
-    Extracts concepts using strict semantic validation.
-
-    A concept MUST be:
-    - A noun or noun phrase
-    - Names a thing, system, algorithm, protocol, hardware component,
-      data structure, language, model, metric, process, architecture, or technology
-    - Could realistically be the answer to a quiz question
-
-    If uncertain, reject the concept.
-    Precision > Recall
-    """
 
     # Words that indicate a concept is actually a verb phrase
     VERB_STARTS = {
@@ -812,6 +894,40 @@ class SemanticConceptExtractor:
 # CONCEPT VALIDATOR
 # =============================================================================
 
+    """
+    CHECKPOINT:
+    CONCEPT VALIDATION LAYER
+
+    Purpose:
+        Final gate before a concept becomes a fact.
+
+    Receives:
+        Extracted concept candidates
+
+    Returns:
+        Valid / Invalid decision
+
+    Valid concepts:
+        - Technologies
+        - Algorithms
+        - Systems
+        - Protocols
+        - Models
+        - Data structures
+
+    Rejects:
+        - Generic terms
+        - Sentence fragments
+        - Weak concepts
+
+    Connected:
+        SemanticConceptExtractor
+            ↓
+        FactExtractor
+
+    Risk:
+        Weak validation allows noisy facts downstream.
+    """
 
 class ConceptValidator:
     """
@@ -1011,6 +1127,42 @@ class FactExtractor:
 
     # ========== FACT BUILDING ==========
 
+    """
+    FUNCTION CHECKPOINT:
+    DATA TRANSFORMATION
+
+    Stage:
+
+        Raw Sentence
+             ↓
+        Candidate Fact
+             ↓
+        Validated Fact Object
+
+    Input:
+        Cleaned sentence
+
+    Output:
+        Atomic fact dictionary
+
+    Validation:
+        - Concept exists
+        - Concept is valid
+        - Source is attached
+        - Fact schema accepts it
+
+    Must preserve:
+        - Concept
+        - Definition
+        - Topic
+        - Source
+
+    Must not:
+        - Summarize
+        - Expand meaning
+        - Add external knowledge
+    """
+
     def _build_atomic_fact(
         self, text: str, topic: str, source: str, weight: int = 7
     ) -> Tuple[Optional[Dict[str, Any]], Optional[RejectionInfo]]:
@@ -1092,6 +1244,42 @@ class FactExtractor:
         except Exception as e:
             return None, RejectionInfo(RejectionReason.CREATION_ERROR, str(e), text)
 
+    """
+    FUNCTION CHECKPOINT:
+    FACT EXTRACTION PIPELINE
+
+    Stage:
+
+        Markdown Content
+              ↓
+        Candidate Lines
+              ↓
+        Atomic Facts
+
+    Handles:
+        - Line processing
+        - Heading filtering
+        - Duplicate removal
+        - Rejection tracking
+
+    Connected:
+
+        HeadingFilter
+             ↓
+        SemanticConceptExtractor
+             ↓
+        ConceptValidator
+             ↓
+        Fact Builder
+
+    Output:
+        List of validated facts
+
+    Risk:
+        Changing filtering rules affects
+        knowledge coverage.
+    """
+    
     def _extract_atomic_facts(
         self, content: str, topic: str, source: str
     ) -> List[Dict[str, Any]]:

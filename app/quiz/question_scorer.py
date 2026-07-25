@@ -1,21 +1,10 @@
-"""
-Question Scorer Module - Pure evaluation of generated questions.
-
-This module is responsible ONLY for evaluating the quality of already-generated
-questions. It does NOT modify, generate, or select questions.
-
-Responsibilities:
-- Compute weighted quality scores
-- Return detailed sub-scores
-- Explain why points were deducted
-
-This module does NOT:
-- Modify or generate questions
-- Choose distractors
-- Infer ontology
-- Access LLMs
-- Duplicate logic from fact_schema.py or options_parser.py
-"""
+# NOTE:
+# This module only evaluates generated questions.
+# It should not contain generation logic, LLM calls,
+# or modification of question data.
+#
+# Hard failures belong in semantic_validator.py.
+# Quality measurements belong here.
 
 import logging
 from typing import Dict, List, Any, Tuple, Optional
@@ -31,11 +20,13 @@ from ..models.question_schema import validate_question_schema
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# CONSTANTS
-# ============================================================================
+# Scoring weights:
+# Higher weights represent dimensions that affect
+# overall question quality more strongly.
+#
+# Adjust carefully because changing these values
+# changes acceptance behavior.
 
-# Default weights for scoring dimensions
 DEFAULT_WEIGHTS = {
     "schema": 0.25,
     "semantic": 0.30,
@@ -47,7 +38,10 @@ DEFAULT_WEIGHTS = {
 # Minimum acceptable overall score
 DEFAULT_MIN_SCORE = 0.6
 
-# Stop words for semantic analysis
+# Common words ignored during token comparison.
+# Used to compare meaning-related words instead
+# of matching common English words.
+
 STOP_WORDS = {
     "the",
     "this",
@@ -135,6 +129,11 @@ class QuestionScorer:
     # PUBLIC API
     # =========================================================================
 
+# TODO:
+# Facts are currently accepted as input but not used.
+# Future improvement:
+# Use facts to measure grounding quality directly.
+
     def score_question(
         self, question: Dict[str, Any], facts: Optional[List[Dict[str, Any]]] = None
     ) -> Tuple[float, Dict[str, float], List[str]]:
@@ -161,7 +160,10 @@ class QuestionScorer:
         """
         facts = facts or []
 
-        # Compute individual scores
+        # Each scoring dimension is independent.
+        # A failure in one area should reduce the score
+        # without affecting other measurements.
+
         schema_score = self._score_schema(question)
         semantic_score = self._score_semantic(question)
         distractor_score = self._score_distractors(question)
@@ -236,9 +238,11 @@ class QuestionScorer:
             "question_preview": question.get("question", "")[:100] + "...",
         }
 
-    # =========================================================================
-    # SCORING DIMENSIONS
-    # =========================================================================
+    # Schema scoring:
+    # Checks structural correctness only.
+    #
+    # Does not validate meaning.
+    # Meaning validation belongs to semantic checks.
 
     def _score_schema(self, question: Dict[str, Any]) -> float:
         """
@@ -253,6 +257,13 @@ class QuestionScorer:
         if validate_question_schema(question):
             return 1.0
         return 0.0
+
+    # Semantic scoring:
+    # Measures whether the question, answer,
+    # and explanation agree with each other.
+    #
+    # This is a soft score.
+    # Hard rejection rules belong in semantic_validator.py.
 
     def _score_semantic(self, question: Dict[str, Any]) -> float:
         """
@@ -331,6 +342,14 @@ class QuestionScorer:
             scores.append(0.0)
 
         return sum(scores) / len(scores) if scores else 0.0
+
+    # Distractor scoring:
+    # Evaluates existing distractors only.
+    #
+    # This function does NOT:
+    # - create distractors
+    # - replace distractors
+    # - select the correct answer
 
     def _score_distractors(self, question: Dict[str, Any]) -> float:
         """

@@ -146,8 +146,12 @@ def build_fill_blank_question(
         flags=re.IGNORECASE
     )
 
-    # Avoid duplicate "is"
-    if re.match(r"^(refers to|means|is|are)\b", text, re.IGNORECASE):
-        return f"_______ {text}"
+    # Normalize definition-style openings
+    text = re.sub(
+        r"^(refers to|means|is|are)\s+",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
 
     return f"_______ is {text}"

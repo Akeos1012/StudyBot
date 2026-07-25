@@ -131,7 +131,7 @@ def setup_routes(quiz_service, metadata_loader, metadata):
             topic=topic,
             subtopic=subtopic,
             difficulty=difficulty,
-            count=3,
+            count=request.count,
         )
 
         if not questions:

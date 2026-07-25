@@ -1,13 +1,89 @@
 """
-Question similarity utilities.
+MODULE: Question Similarity
 
-Responsible for detecting whether a newly generated question is too similar
-to questions already stored in the cache.
+LOCATION:
+app/quiz/question_similarity.py
+
+
+PIPELINE POSITION:
+
+Generated Question
+        |
+        v
+Question Similarity Check
+        |
+        +------------+
+        |            |
+        v            v
+Duplicate      Unique
+ Reject         Accept
+                    |
+                    v
+             Question Cache
+
+
+MAIN PURPOSE:
+
+Compare newly generated questions against existing questions
+to prevent duplicates from entering the question pool.
+
+This module only measures similarity.
+
+It NEVER:
+- generates questions
+- edits questions
+- validates correctness
+- scores quality
+
+
+INPUT:
+- Newly generated question
+- Existing question pool
+
+OUTPUT:
+True  -> duplicate detected
+False -> sufficiently unique
+
+
+CONNECTED MODULES:
+
+Used by:
+- quiz_generator.py
+- question_cache.py
+
+Dependencies:
+- Python SequenceMatcher
+
+
+AUDIT STATUS:
+CORE DEDUPLICATION MODULE
+Changes affect cache diversity.
 """
 
 from difflib import SequenceMatcher
 from typing import Dict, List
 
+# ============================================================================
+# TEXT NORMALIZATION CHECKPOINT
+#
+# Purpose:
+# Normalize question text before similarity comparison.
+#
+# Removes common filler words so comparison focuses on
+# the important technical content.
+#
+# Example:
+#
+# "What is Cloud Storage?"
+#
+# becomes
+#
+# "cloud storage"
+#
+# Connected:
+# similarity()
+# is_similar_to_pool()
+# ============================================================================
 
 def normalize(text: str) -> str:
     """Normalize text for comparison."""
@@ -33,11 +109,65 @@ def normalize(text: str) -> str:
 
     return " ".join(text.split())
 
+# ============================================================================
+# SIMILARITY SCORING CHECKPOINT
+#
+# Purpose:
+# Calculate similarity between two normalized strings.
+#
+# Returns:
+# 0.0 = completely different
+# 1.0 = identical
+#
+# Uses:
+# Python SequenceMatcher
+#
+# Connected:
+# is_similar_to_pool()
+# ============================================================================
 
 def similarity(a: str, b: str) -> float:
     """Return similarity score between two strings (0.0–1.0)."""
     return SequenceMatcher(None, normalize(a), normalize(b)).ratio()
 
+# ============================================================================
+# DUPLICATE POOL CHECKPOINT
+#
+# Purpose:
+# Prevent duplicate questions from entering the cache.
+#
+# Comparison uses three dimensions:
+#
+# 1. Question wording
+# 2. Correct answer
+# 3. Supporting fact
+#
+# Rejection Rules:
+#
+# - Same wording + same answer
+# - Nearly identical wording generated from the same fact
+#
+# Same concept is allowed if the supporting fact and wording
+# are sufficiently different.
+#
+# Pipeline:
+#
+# QuizGenerator
+#      |
+#      v
+# Generated Question
+#      |
+#      v
+# is_similar_to_pool()
+#      |
+#      +--> Duplicate → Reject
+#      |
+#      +--> Unique → Cache
+#
+# Connected:
+# - quiz_generator.py
+# - question_cache.py
+# ============================================================================
 
 def is_similar_to_pool(
     question: Dict,

@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Tests/cache
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+
+# Frontend dependencies
+node_modules/
+
+# Logs
+*.log
+
+# Build
+dist/
+build/
+
+# Database/cache files
+*.db
+*.sqlite
+
+# Large data
+sample_notes/

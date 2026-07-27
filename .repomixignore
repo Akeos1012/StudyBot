@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+*.json
+*.log
+
+sample_notes/
+facts_cache.json
+question_cache.json

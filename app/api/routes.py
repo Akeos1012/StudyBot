@@ -11,6 +11,8 @@ from app.models.api_schema import (
     QuizRequest,
     FillBlankRequest,
     QuizResponse,
+    AnswerSubmission,
+    AnswerResponse,
 )
 
 def setup_routes(quiz_service, metadata_loader, metadata):
@@ -156,6 +158,19 @@ def setup_routes(quiz_service, metadata_loader, metadata):
                 )
             ),
         }
+
+    @router.post(
+        "/quiz/submit-answer",
+        response_model=AnswerResponse
+    )
+    async def submit_answer(request: AnswerSubmission):
+
+        result = quiz_service.record_answer(
+            request.question_id,
+            request.answer
+        )
+
+        return result
 
     @router.post("/refresh-notes")
     async def refresh_notes():

@@ -67,7 +67,8 @@ from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
 from ..quiz.quiz_generator import QuizGenerator
 from ..monitoring.quiz_metrics import QuizMetrics
-from ..quiz.monitoring.performance_monitor import PerformanceMonitor
+from ..quiz.question_metadata import update_answer_result
+from ..monitoring.performance_monitor import PerformanceMonitor
 from ..quiz.validation_logger import set_metrics, get_metrics
 from app.config import settings
 
@@ -362,7 +363,47 @@ class QuizService:
             q["question_id"] = str(hash(q.get("question", "")))
 
         return result
+
+    def record_answer(
+        self,
+        question_id: str,
+        answer: str
+    ):
+        cache = self.quiz_generator.cache
+
+        question = cache.get_question_by_id(question_id)
+
+        if not question:
+            return {
+                "success": False,
+                "question_id": question_id,
+                "correct": False,
+                "success_rate": 0.0
+            }
     
+        correct = (
+            answer.upper()
+            ==
+            question.get("correct", "").upper()
+        )
+
+        update_answer_result(
+            question["metadata"],
+            correct
+        )
+
+        cache.update_question(
+            question_id,
+            question
+        )
+
+        return {
+            "success": True,
+            "question_id": question_id,
+            "correct": correct,
+            "success_rate": question["metadata"]["success_rate"]
+        }
+
     # ============================================================
     # PRIVATE HELPERS
     # ============================================================

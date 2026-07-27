@@ -1,0 +1,9 @@
+render_toc: true
+
+loaders:
+  - type: python
+    search_path:
+      - app
+
+renderer:
+  type: markdown

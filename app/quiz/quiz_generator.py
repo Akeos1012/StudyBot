@@ -64,6 +64,7 @@ from .llm_parser import LLMParser
 from .llm_client import LLMClient
 import traceback
 from app.config import settings
+from app.models.fact_schema import normalize_fact
 from .distractor_selector import DistractorSelector
 import random
 
@@ -488,6 +489,9 @@ class QuizGenerator:
 # IMPORTANT:
 # This function is the main hallucination barrier.
 
+            print("ANSWER:", answer)
+            print("TOPIC:", topic)
+
             question = self.generate_from_fact(
                 fact,
                 answer,
@@ -496,6 +500,9 @@ class QuizGenerator:
                 style_hint=None,
                 question_type=question_type
             )
+
+            print("RESULT:", question)
+            print("==============================\n")
             if question:
 
                 if attempt == 0:
@@ -520,6 +527,7 @@ class QuizGenerator:
         style_hint: str = None,
         question_type: str = "multiple",
     ) -> Optional[dict]:
+
         """
         Generate a question from a single fact with coherence checking.
 
@@ -622,18 +630,22 @@ class QuizGenerator:
             result = self.parser.parse(content)
 
             if result is None:
+                print("❌ FAILED: parser.parse returned None")
                 log_validation_failure(None, "json_parse", "Failed to parse LLM response")
                 return None
 
             questions = self.parser.extract_questions(result)
 
             if not questions:
+                print("❌ FAILED: extract_questions returned empty")
                 log_validation_failure(None, "json_parse", "No questions found")
                 return None
 
             question = questions[0]
 
+            print(question)
             question["correct"] = answer
+            print(question)
 
             distractors = self.distractor_selector.select_distractors(
                 self._supporting_facts,
@@ -667,7 +679,13 @@ class QuizGenerator:
             # ===== VALIDATION PIPELINE =====
 
             # Stage 1: Structure
+            print(question.get("question"))
+
+
             if not validate_structure(question):
+                print("❌ validate_structure FAILED")
+                print("FAILED QUESTION:")
+                print(question.get("question"))
                 return None
 
             # Stage 1.5: Distractors
@@ -675,11 +693,7 @@ class QuizGenerator:
                 return None
 
             # Stage 2: Content - Grounding
-            print("\n=== GROUNDING DEBUG ===")
             print("ANSWER:", answer)
-            print("SANITIZED FACT:", sanitized_supporting_fact)
-            print("CONTEXT FACT:", fact)
-            print("=======================\n")
 
             if not validate_grounding(question, fact, supporting_fact=sanitized_supporting_fact):
                 return None
@@ -852,12 +866,24 @@ class QuizGenerator:
         
         # Process up to 3x requested count for filtering
         generation_pool = supporting_facts * settings.FACT_MULTIPLIER
+
         for fact_data in generation_pool[:remaining * settings.FACT_MULTIPLIER]:
             if not isinstance(fact_data, dict):
                 continue
 
+            # Ensure fact follows the shared schema
+            fact_data = normalize_fact(fact_data)
+
+            if not fact_data:
+                continue
+
             concept = fact_data.get("concept", "").strip()
-            definition = fact_data.get("supporting_fact") or fact_data.get("definition") or fact_data.get("sentence") or ""
+            definition = (
+                fact_data.get("supporting_fact")
+                or fact_data.get("definition")
+                or fact_data.get("sentence")
+                or ""
+            )
 
             if not concept or not definition:
                 continue

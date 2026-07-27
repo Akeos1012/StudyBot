@@ -18,6 +18,19 @@ class FillBlankRequest(BaseModel):
     count: int = Field(default=3, ge=1, le=50)
     fresh: bool = False
 
+
+class AnswerSubmission(BaseModel):
+    question_id: str
+    answer: str
+
+
+class AnswerResponse(BaseModel):
+    success: bool = True
+    question_id: str
+    correct: bool
+    success_rate: float
+
+
 class QuestionResponse(BaseModel):
     topic: Optional[str] = None
     subtopic: Optional[str] = None

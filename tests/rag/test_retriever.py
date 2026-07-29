@@ -1,14 +1,19 @@
 from app.rag.fact_cache import FactCache
 from app.rag.retriever import Retriever
 
-cache = FactCache()
-cache.load()
 
-retriever = Retriever(cache)
+def test_retriever_software_topic():
+    cache = FactCache()
+    cache.load()
 
-facts = retriever.retrieve(topic="Software", limit=5)
+    retriever = Retriever(cache)
 
-print()
+    facts = retriever.retrieve(
+        topic="Software",
+        limit=5
+    )
 
-for f in facts:
-    print(f["concept"])
+    assert isinstance(facts, list)
+
+    for f in facts:
+        print(f["concept"])

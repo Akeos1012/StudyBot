@@ -179,7 +179,7 @@ def explanation_contradicts_answer(question: dict) -> bool:
             return True
 
     if letter_match:
-        explained_letter = letter_match.group(1)
+        explained_letter = letter_match.group(1).upper()
 
         if explained_letter != correct_letter:
             logger.warning(

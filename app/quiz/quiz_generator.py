@@ -46,6 +46,9 @@
 import json
 import re
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 from difflib import SequenceMatcher
 from json_repair import repair_json
@@ -319,19 +322,26 @@ class QuizGenerator:
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
-        min_quality_score: float = MIN_QUALITY_SCORE
+        model=DEFAULT_MODEL,
+        min_quality_score=MIN_QUALITY_SCORE,
+        cache=None,
+        fact_cache=None,
+        llm_client=None,
     ):
         self.model = model
         self.llm = LLMClient(model=model)
         self.fill_blank_generator = FillBlankGenerator()
 
         # Cache of previously generated questions
-        self.cache = QuestionCache()
+        self.cache = cache or QuestionCache()
+        self.fact_cache = fact_cache or FactCache()
+        self.llm = llm_client or LLMClient(model=model)
 
         # Knowledge base
-        self.fact_cache = FactCache()
-        self.fact_cache.load()
+        self.fact_cache = fact_cache or FactCache()
+
+        if fact_cache is None:
+            self.fact_cache.load()
 
         # Fact retriever
         self.retriever = Retriever(self.fact_cache)
@@ -642,6 +652,8 @@ class QuizGenerator:
                 return None
 
             question = questions[0]
+            print("\n=== PARSED QUESTION ===")
+            print(question)
 
             print(question)
             question["correct"] = answer
@@ -690,12 +702,17 @@ class QuizGenerator:
 
             # Stage 1.5: Distractors
             if not validate_distractors(question):
+                print("❌ validate_distractors FAILED")
+                print(question)
                 return None
 
             # Stage 2: Content - Grounding
             print("ANSWER:", answer)
 
             if not validate_grounding(question, fact, supporting_fact=sanitized_supporting_fact):
+                print("❌ validate_grounding FAILED")
+                print(question)
+                print("FACT:", fact)
                 return None
 
             # Stage 2: Content - Topic relevance
@@ -907,24 +924,31 @@ class QuizGenerator:
 
                 if question.get("type", "mcq") != "fill_blank":
 
-                    if not validate_structure(question):
-                        print("FAILED: structure")
-                        continue
+                    print("\nGENERATED QUESTION BEFORE VALIDATION:")
+                    print(question)
 
+                    if not validate_structure(question):
+                        print("❌ validate_structure FAILED")
+                        print(question)
+                        return None
+                    
                     if not validate_distractors(question):
-                        print("FAILED: distractors")
+                        print("❌ FAILED: distractor validation")
                         continue
 
                     if not validate_semantic(question):
-                        print("FAILED: semantic")
+                        print("❌ FAILED: semantic validation")
                         continue
+
                     if not validate_domain_correctness(
                         question,
                         concept,
-                        definition,
+                        definition
                     ):
-                        print("FAILED: domain")
+                        print("❌ FAILED: domain correctness")
                         continue
+
+                    print("✅ PASSED ALL VALIDATORS")
 
                 if question:
 

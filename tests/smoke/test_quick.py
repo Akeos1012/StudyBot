@@ -1,58 +1,37 @@
-# test_quick.py
-"""Quick smoke test for the quiz system."""
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent))
-
 from app.rag.fact_cache import FactCache
 from app.quiz.quiz_generator import QuizGenerator
 
 
-def main():
-    print("🚀 Quick Quiz Test")
-    print("=" * 40)
-
-    # Load cache
+def test_quick_quiz_pipeline():
     cache = FactCache()
     cache.load()
-    print(f"✅ Cache loaded")
 
-    # Test with Algorithms
-    topic = "Algorithms"
-    facts = cache.get_facts(topic)
-    print(f"✅ Found {len(facts)} facts for '{topic}'")
+    gen = QuizGenerator()
 
-    if facts:
-        # Generate questions
-        gen = QuizGenerator()
-        questions = gen.build_quiz(facts, count=3)
+    # Test Algorithms
+    algorithms_facts = cache.get_facts("Algorithms")
 
-        print(f"✅ Generated {len(questions)} questions\n")
+    assert isinstance(algorithms_facts, list)
 
-        for i, q in enumerate(questions, 1):
-            print(f"Q{i}: {q['question']}")
-            print(f"  Options: {q['options']}")
-            print(f"  Correct: {q['correct_letter']} ({q['correct_answer']})")
-            print(f"  Type: {q.get('question_type', 'unknown')}")
-            print()
+    if algorithms_facts:
+        result = gen.generate_questions(
+            topic="Algorithms",
+            supporting_facts=algorithms_facts,
+            count=3
+        )
 
-    # Test with Cloud
-    topic = "Cloud"
-    facts = cache.get_facts(topic)
-    print(f"✅ Found {len(facts)} facts for '{topic}'")
+        assert "questions" in result
 
-    if facts:
-        questions = gen.build_quiz(facts, count=2)
-        print(f"✅ Generated {len(questions)} questions\n")
+    # Test Cloud
+    cloud_facts = cache.get_facts("Cloud")
 
-        for i, q in enumerate(questions, 1):
-            print(f"Q{i}: {q['question']}")
-            print(f"  Options: {q['options']}")
-            print(f"  Correct: {q['correct_letter']} ({q['correct_answer']})")
-            print()
+    assert isinstance(cloud_facts, list)
 
+    if cloud_facts:
+        result = gen.generate_questions(
+            topic="Cloud",
+            supporting_facts=cloud_facts,
+            count=2
+        )
 
-if __name__ == "__main__":
-    main()
+        assert "questions" in result

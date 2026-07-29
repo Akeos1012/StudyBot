@@ -884,6 +884,12 @@ class QuizGenerator:
         # Process up to 3x requested count for filtering
         generation_pool = supporting_facts * settings.FACT_MULTIPLIER
 
+        # Import diversity scorer
+        from app.quiz.question_diversity import calculate_diversity_score
+
+        # Track batch diversity
+        current_batch = []
+
         for fact_data in generation_pool[:remaining * settings.FACT_MULTIPLIER]:
             if not isinstance(fact_data, dict):
                 continue
@@ -901,6 +907,30 @@ class QuizGenerator:
                 or fact_data.get("sentence")
                 or ""
             )
+
+            # Check similarity first (Hard Reject)
+            # Assuming is_similar_to_pool exists in QuizGenerator scope based on previous context
+            if is_similar_to_pool(
+                {"question": definition, "correct_text": concept, "supporting_fact": definition},
+                self.cache.sample(topic=topic, count=100) or []
+            ):
+                continue
+
+            # Diversity Check (Soft Filter)
+            candidate = {
+                "concept": concept,
+                "difficulty": "medium", # Default for now
+                "type": "multiple_choice"
+            }
+            
+            diversity_score = calculate_diversity_score(candidate, current_batch)
+            
+            # If batch is still small, don't be too strict
+            if len(current_batch) > 1 and diversity_score < 0.4:
+                continue
+
+            llm_start = time.perf_counter()
+            # ... continue existing generation ...
 
             if not concept or not definition:
                 continue
@@ -977,6 +1007,7 @@ class QuizGenerator:
                         continue
 
                     valid_questions.append(question)
+                    current_batch.append(question)
                     print("✅ ACCEPTED")
 
                     if len(valid_questions) >= count:

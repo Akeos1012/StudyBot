@@ -102,6 +102,10 @@ def metadata_loader(tmp_path):
         str(notes_dir)
     )
 
+from app.quiz.pool_manager import PoolManager
+from app.monitoring.pool_metrics import PoolMetrics
+from app.rag.retriever import Retriever
+
 @pytest.fixture
 def quiz_service(
     test_fact_cache,
@@ -116,9 +120,17 @@ def quiz_service(
         cache=question_cache, fact_cache=test_fact_cache, llm_client=mock_llm_client
     )
 
+    pool_manager = PoolManager(
+        cache=question_cache,
+        generator=generator,
+        retriever=Retriever(fact_cache=test_fact_cache),
+        pool_metrics=PoolMetrics()
+    )
+
     return QuizService(
         metadata_loader=metadata_loader,
-        quiz_generator=generator
+        quiz_generator=generator,
+        pool_manager=pool_manager
     )
 
 

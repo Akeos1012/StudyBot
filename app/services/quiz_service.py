@@ -66,6 +66,7 @@ from ..rag.grounding_processor import GroundingProcessor
 from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
 from ..quiz.quiz_generator import QuizGenerator
+from ..quiz.pool_manager import PoolManager
 from ..monitoring.quiz_metrics import QuizMetrics
 from ..quiz.question_metadata import update_answer_result
 from ..monitoring.performance_monitor import PerformanceMonitor
@@ -123,9 +124,10 @@ class QuizService:
         Changes here affect the entire quiz workflow.
     """
 
-    def __init__(self, metadata_loader: MetadataLoader, quiz_generator: QuizGenerator):
+    def __init__(self, metadata_loader: MetadataLoader, quiz_generator: QuizGenerator, pool_manager: PoolManager):
         self.metadata_loader = metadata_loader
         self.quiz_generator = quiz_generator
+        self.pool_manager = pool_manager
 
     def generate_questions_for_topic(
         self,
@@ -261,6 +263,16 @@ class QuizService:
                 difficulty=difficulty,
                 count=count
             )
+
+        # Proactive Pool Management
+        try:
+            health = self.pool_manager.should_expand_pool(topic)
+            if health.get("expand", False):
+                logger.info(f"Pool expansion triggered: {health.get('reasons')}")
+                self.pool_manager.expand_pool(topic)
+        except Exception as e:
+            logger.error(f"PoolManager expansion failed for {topic}: {e}")
+            # Continue to fallback generation
 
         if not fresh:
             cached_questions = cache.sample(

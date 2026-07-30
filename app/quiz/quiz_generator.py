@@ -432,6 +432,7 @@ class QuizGenerator:
         fact_data: dict = None,
         supporting_facts: list = None,
         question_type: str = "multiple",
+        metrics_context=None,
     ) -> Optional[dict]:
         """
         Generate a question with retries if validation fails.
@@ -451,7 +452,7 @@ class QuizGenerator:
             print(f"🔄 Generation attempt {attempt + 1}/{max_attempts}")
 
             if attempt > 0:
-                metrics = get_metrics()
+                metrics = get_metrics(metrics_context)
                 if metrics:
                     metrics.llm_retry_count += 1
 
@@ -508,7 +509,8 @@ class QuizGenerator:
                 topic,
                 fact_data,
                 style_hint=None,
-                question_type=question_type
+                question_type=question_type,
+                metrics_context=metrics_context
             )
 
             print("RESULT:", question)
@@ -516,11 +518,11 @@ class QuizGenerator:
             if question:
 
                 if attempt == 0:
-                    metrics = get_metrics()
+                    metrics = get_metrics(metrics_context)
                     if metrics:
                         metrics.accepted_first_try += 1
                 else:
-                    metrics = get_metrics()
+                    metrics = get_metrics(metrics_context)
                     if metrics:
                         metrics.accepted_after_retry += 1
 
@@ -536,6 +538,7 @@ class QuizGenerator:
         fact_data: dict = None,
         style_hint: str = None,
         question_type: str = "multiple",
+        metrics_context=None,
     ) -> Optional[dict]:
 
         """
@@ -826,7 +829,8 @@ class QuizGenerator:
         self,
         topic: str,
         count: int = 1,
-        supporting_facts: list = None
+        supporting_facts: list = None,
+        metrics_context=None,
     ) -> Dict[str, Any]:
         """
         Generate grounded multiple-choice questions from extracted facts.
@@ -835,6 +839,7 @@ class QuizGenerator:
             topic: The topic name
             count: Number of questions to generate
             supporting_facts: List of extracted fact dictionaries
+            metrics_context: Metrics context for isolation
 
         Returns:
             Dictionary with 'questions' key containing list of validated questions
@@ -944,6 +949,7 @@ class QuizGenerator:
                 fact_data=fact_data,
                 supporting_facts=supporting_facts,
                 question_type=question_type,
+                metrics_context=metrics_context
             )
 
             # Skip fact if fill blank generation failed

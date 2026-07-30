@@ -61,14 +61,16 @@ import logging
 import random
 from typing import List, Dict, Any
 
-
 from ..rag.grounding_processor import GroundingProcessor
 from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
 from ..quiz.quiz_generator import QuizGenerator
 from ..quiz.pool_manager import PoolManager
 from ..monitoring.quiz_metrics import QuizMetrics
+from ..monitoring.metrics_context import MetricsContext
 from ..quiz.question_metadata import update_answer_result
+# ...
+
 from ..monitoring.performance_monitor import PerformanceMonitor
 from ..quiz.validation_logger import set_metrics, get_metrics
 from app.config import settings

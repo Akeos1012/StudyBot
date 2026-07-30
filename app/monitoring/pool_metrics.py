@@ -1,6 +1,9 @@
+import logging
 from dataclasses import dataclass, field
 import time
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class PoolMetrics:
@@ -29,13 +32,15 @@ class PoolMetrics:
     def record_expansion_attempt(self):
         self.expansion_attempts += 1
 
-    def record_expansion_success(self, questions_added: int, duration_ms: float):
+    def record_expansion_success(self, expansion_id: str, topic: str, questions_added: int, duration_ms: float):
         self.expansion_success += 1
         self.total_questions_added += questions_added
         self.total_expansion_time_ms += duration_ms
+        logger.info(f"Expansion success: {expansion_id} | Topic: {topic} | Added: {questions_added} | Duration: {duration_ms:.2f}ms")
 
-    def record_expansion_failure(self):
+    def record_expansion_failure(self, expansion_id: str, topic: str, failure_reason: str):
         self.expansion_failure += 1
+        logger.error(f"Expansion failure: {expansion_id} | Topic: {topic} | Reason: {failure_reason}")
 
     def report(self) -> Dict[str, Any]:
         return {

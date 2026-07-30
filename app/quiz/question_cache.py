@@ -14,10 +14,10 @@ All validation and deduplication logic is delegated to dedicated modules.
 import json
 import hashlib
 import random
+import threading
 from datetime import datetime
 import logging
 from pathlib import Path
-from datetime import datetime
 from typing import List, Dict, Any, Optional
 from .question_metadata import create_metadata
 
@@ -43,16 +43,8 @@ CACHE_METADATA_KEY = "__metadata__"
 # MAIN CLASS
 # ============================================================================
 
-
 class QuestionCache:
-    """
-    Persistent storage layer for generated questions.
-
-    This class manages question pools in a JSON file. Each pool is keyed by
-    a combination of topic, subtopic, difficulty, and question type.
-
-    All validation and deduplication is delegated to separate modules.
-    """
+    _lock = threading.Lock()
 
     def __init__(
         self, cache_file: str = DEFAULT_CACHE_FILE, pool_size: int = DEFAULT_POOL_SIZE
@@ -82,52 +74,54 @@ class QuestionCache:
             logger.info("No cache file found, starting with empty cache")
             return
 
-        try:
-            with open(self.cache_file, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
+        with self._lock:
+            try:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
 
-            # Validate metadata
-            metadata = loaded.get(CACHE_METADATA_KEY, {})
-            version = metadata.get("version", 0)
+                # Validate metadata
+                metadata = loaded.get(CACHE_METADATA_KEY, {})
+                version = metadata.get("version", 0)
 
-            if version != CACHE_VERSION:
-                logger.warning(
-                    f"Cache version mismatch (v{version} != v{CACHE_VERSION}), rebuilding cache"
+                if version != CACHE_VERSION:
+                    logger.warning(
+                        f"Cache version mismatch (v{version} != v{CACHE_VERSION}), rebuilding cache"
+                    )
+                    self.cache = {}
+                    self._initialize_metadata()
+                    return
+
+                self.cache = loaded
+                total_questions = self._total_questions()
+                logger.info(
+                    f"Loaded {total_questions} cached questions across {len(self.cache)} pools"
                 )
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Corrupt cache file: {e}, resetting cache")
                 self.cache = {}
                 self._initialize_metadata()
-                return
-
-            self.cache = loaded
-            total_questions = self._total_questions()
-            logger.info(
-                f"Loaded {total_questions} cached questions across {len(self.cache)} pools"
-            )
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Corrupt cache file: {e}, resetting cache")
-            self.cache = {}
-            self._initialize_metadata()
-        except Exception as e:
-            logger.error(f"Could not load cache: {e}")
-            self.cache = {}
+            except Exception as e:
+                logger.error(f"Could not load cache: {e}")
+                self.cache = {}
 
     def save_cache(self) -> None:
         """Save cache to disk."""
-        try:
-            # Update metadata before saving
-            self._update_metadata()
+        with self._lock:
+            try:
+                # Update metadata before saving
+                self._update_metadata()
 
-            with open(self.cache_file, "w", encoding="utf-8") as f:
-                json.dump(self.cache, f, indent=2, ensure_ascii=False)
+                with open(self.cache_file, "w", encoding="utf-8") as f:
+                    json.dump(self.cache, f, indent=2, ensure_ascii=False)
 
-            total_questions = self._total_questions()
-            logger.info(
-                f"Saved {total_questions} questions across {len(self.cache)} pools"
-            )
+                total_questions = self._total_questions()
+                logger.info(
+                    f"Saved {total_questions} questions across {len(self.cache)} pools"
+                )
 
-        except Exception as e:
-            logger.error(f"Could not save cache: {e}")
+            except Exception as e:
+                logger.error(f"Could not save cache: {e}")
 
     def get_key(
         self,
@@ -268,6 +262,10 @@ class QuestionCache:
         # Filter valid questions only
 
         for q in new_questions:
+            if not isinstance(q, dict):
+                logger.warning("Rejected invalid cached question: not a dict")
+                continue
+            
             q.setdefault(
                 "cached_at",
                 datetime.now().isoformat()
@@ -281,12 +279,15 @@ class QuestionCache:
         valid_new = []
 
         for q in new_questions:
+            if not isinstance(q, dict):
+                continue
+
             valid = is_valid_question(q)
 
             if not valid:
                 logger.warning(
                     "Rejected invalid cached question: %s",
-                    q.get("question", "")[:80]
+                    str(q)[:80]
                 )
 
             if valid:

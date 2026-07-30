@@ -1,10 +1,15 @@
 import logging
 import time
-from typing import Dict, Any, List
+import threading
+import uuid
+from typing import Dict, Any, List, Set
 from app.quiz.question_cache import QuestionCache
 from app.quiz.quiz_generator import QuizGenerator
 from app.rag.retriever import Retriever
 from app.monitoring.pool_metrics import PoolMetrics
+from app.monitoring.quiz_metrics import QuizMetrics
+from app.monitoring.metrics_context import MetricsContext
+# ...
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +29,25 @@ class PoolManager:
         self.retriever = retriever
         self.pool_metrics = pool_metrics
         self.min_pool_size = 5 
+        
+        # Expansion state tracking
+        self._expansion_lock = threading.Lock()
+        self._expanding_topics: Set[str] = set()
+
+    def is_expanding(self, topic: str) -> bool:
+        with self._expansion_lock:
+            return topic in self._expanding_topics
+
+    def try_start_expansion(self, topic: str) -> bool:
+        with self._expansion_lock:
+            if topic in self._expanding_topics:
+                return False
+            self._expanding_topics.add(topic)
+            return True
+
+    def finish_expansion(self, topic: str):
+        with self._expansion_lock:
+            self._expanding_topics.discard(topic)
 
     def calculate_target_pool_size(self, topic: str) -> Dict[str, Any]:
         facts = self.retriever.retrieve(topic=topic, limit=1000)
@@ -113,7 +137,7 @@ class PoolManager:
         questions = self.cache.sample(
             topic=topic,
             count=self._get_topic_pool_size(topic)
-        )
+        ) or []
         
         distribution = {
             "total": len(questions),
@@ -145,21 +169,31 @@ class PoolManager:
         return plan
 
     def expand_pool(self, topic: str) -> bool:
-        decision = self.should_expand_pool(topic)
-        if not decision["expand"]:
-            return True
-            
-        self.pool_metrics.record_expansion_attempt()
-        start_time = time.perf_counter()
+        if not self.try_start_expansion(topic):
+            logger.info(f"Expansion already in progress for {topic}")
+            return True # Already running
         
-        missing = self.calculate_missing_questions(topic)
-        plan = self.generate_expansion_plan(topic, missing)
-        
-        facts = self.retriever.retrieve(topic=topic, limit=20)
-        
-        total_added = 0
+        expansion_id = f"exp_{topic}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        metrics = QuizMetrics(topic=topic)
+        context = MetricsContext(quiz_metrics=metrics, topic=topic, expansion_id=expansion_id)
+
         try:
+            decision = self.should_expand_pool(topic)
+            if not decision["expand"]:
+                return True
+                
+            self.pool_metrics.record_expansion_attempt()
+            start_time = time.perf_counter()
+            
+            missing = self.calculate_missing_questions(topic)
+            plan = self.generate_expansion_plan(topic, missing)
+            
+            facts = self.retriever.retrieve(topic=topic, limit=20)
+            
+            total_added = 0
             for task in plan:
+                # Need to pass context if generator supports it (Stage 5)
+                # For now, just track added
                 result = self.generator.generate_questions(
                     topic=topic,
                     count=task["count"],
@@ -179,9 +213,11 @@ class PoolManager:
                             total_added += added
             
             duration_ms = (time.perf_counter() - start_time) * 1000
-            self.pool_metrics.record_expansion_success(total_added, duration_ms)
+            self.pool_metrics.record_expansion_success(expansion_id, topic, total_added, duration_ms)
             return True
         except Exception as e:
             logger.error(f"Expansion failed for topic {topic}: {e}")
-            self.pool_metrics.record_expansion_failure()
+            self.pool_metrics.record_expansion_failure(expansion_id, topic, str(e))
             return False
+        finally:
+            self.finish_expansion(topic)

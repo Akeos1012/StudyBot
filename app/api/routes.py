@@ -5,7 +5,10 @@ This module contains HTTP endpoint handlers.
 Business logic is delegated to services.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.models.api_schema import (
     QuizRequest,
@@ -17,54 +20,9 @@ from app.models.api_schema import (
 
 def setup_routes(quiz_service, metadata_loader, metadata):
     router = APIRouter()
-    """
-    Configure routes with application dependencies.
-
-    Dependencies are created in main.py:
-    - QuizService
-    - MetadataLoader
-    - Metadata
-    """
-
-    @router.get("/")
-    async def root():
-        return {"message": "AI Study Companion API"}
-
-    @router.get("/topics")
-    async def get_topics():
-        topics = list(set(note["topic"] for note in metadata))
-
-        return {"topics": sorted(topics)}
-
-    @router.get("/topics/{topic}/subtopics")
-    async def get_subtopics(topic: str):
-        subtopics = metadata_loader.get_subtopics_by_topic(topic)
-
-        if not subtopics:
-            raise HTTPException(404, f"No subtopics found for topic: {topic}")
-
-        return {"topic": topic, "subtopics": subtopics}
-
-    @router.get("/topics/{topic}/{subtopic}")
-    async def get_notes_by_subtopic(topic: str, subtopic: str):
-        notes = metadata_loader.get_notes_by_subtopic(topic, subtopic)
-
-        if not notes:
-            raise HTTPException(404, f"No notes found for {topic} > {subtopic}")
-
-        return {"topic": topic, "subtopic": subtopic, "notes": notes}
-
-    @router.get("/notes/{topic}")
-    async def get_notes_by_topic(topic: str):
-        filtered = [n for n in metadata if n["topic"].lower() == topic.lower()]
-
-        if not filtered:
-            raise HTTPException(404, f"No notes found for topic: {topic}")
-
-        return filtered
-
+    # ...
     @router.post("/quiz/generate", response_model=QuizResponse)
-    async def generate_quiz(request: QuizRequest):
+    async def generate_quiz(request: QuizRequest, background_tasks: BackgroundTasks):
 
         try:
             topic = request.topic
@@ -74,6 +32,14 @@ def setup_routes(quiz_service, metadata_loader, metadata):
             difficulty = request.difficulty
             fresh = request.fresh
 
+            # Proactive Pool Management
+            pool_manager = quiz_service.pool_manager
+            health = pool_manager.should_expand_pool(topic)
+            if health.get("expand", False):
+                if pool_manager.try_start_expansion(topic):
+                    logger.info(f"Background pool expansion triggered for {topic}")
+                    background_tasks.add_task(pool_manager.expand_pool, topic)
+            
             questions = quiz_service.get_or_generate_questions(
                 topic=topic,
                 subtopic=subtopic,

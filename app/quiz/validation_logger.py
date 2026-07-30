@@ -76,18 +76,6 @@ logger = logging.getLogger(__name__)
 
 _current_metrics = None
 
-# ============================================================================
-# METRICS REGISTRATION CHECKPOINT
-#
-# Called once at the start of quiz generation.
-#
-# Registers the active QuizMetrics object so validation
-# modules can record failures.
-#
-# Connected:
-# quiz_service.py
-# ============================================================================
-
 def set_metrics(metrics):
     """
     Attach current quiz metrics tracker.
@@ -97,21 +85,12 @@ def set_metrics(metrics):
 
     _current_metrics = metrics
 
-# ============================================================================
-# METRICS ACCESS CHECKPOINT
-#
-# Returns the currently active QuizMetrics object.
-#
-# Used by:
-# - quiz_generator.py
-# - retry tracking
-# - validation pipeline
-# ============================================================================
-
-def get_metrics():
+def get_metrics(metrics_context=None):
     """
     Retrieve current quiz metrics tracker.
     """
+    if metrics_context:
+        return metrics_context.quiz_metrics
 
     return _current_metrics
 
@@ -153,7 +132,8 @@ def log_validation_failure(
     question: dict,
     stage: str,
     reason: str,
-    details: dict = None
+    details: dict = None,
+    metrics_context=None
 ):
     """
     Log detailed validation failures for debugging
@@ -164,8 +144,9 @@ def log_validation_failure(
     logger.warning(f"Reason: {reason}")
 
     # Record failure for metrics
-    if _current_metrics:
-        _current_metrics.add_failure(stage)
+    metrics = get_metrics(metrics_context)
+    if metrics:
+        metrics.add_failure(stage)
 
 
     if details:

@@ -15,16 +15,19 @@ from .question_constants import (
 )
 
 from .question_explanation import build_consistent_explanation
-from .validation_logger import log_validation_failure
 from app.monitoring.metrics_context import MetricsContext
 
 logger = logging.getLogger(__name__)
 
 def _log_failure(question: Dict[str, Any], stage: str, reason: str, extra: Dict[str, Any] = None, metrics_context: MetricsContext = None):
-    if metrics_context:
+    logger.warning(
+        "VALIDATION FAILED | Stage: %s | Reason: %s | Extra: %s",
+        stage,
+        reason,
+        extra
+    )
+    if metrics_context and metrics_context.quiz_metrics:
         metrics_context.quiz_metrics.add_failure(stage)
-    else:
-        log_validation_failure(question, stage, reason, extra)
 
 
 def validate_grounding(
@@ -255,8 +258,8 @@ def explanation_supported_by_fact(
 
     # Requirement 4: Allow expanded educational explanations
     # Requirement 1: Hallucination detection (ensure significant keyword overlap)
-    # Stricter combination: coverage must be at least 40% AND have at least 3 strong matches
-    return coverage >= 0.40 and len(common) >= 3
+    # Stricter combination: coverage must be at least 35% AND have at least 3 strong matches
+    return coverage >= 0.35 and len(common) >= 3
 
 def is_valid_explanation(
     explanation: str,

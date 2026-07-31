@@ -42,6 +42,7 @@ False -> question rejected
 """
 
 import logging
+logger = logging.getLogger(__name__)
 import re
 from typing import Dict, Any, List, Set, Optional
 from difflib import SequenceMatcher
@@ -52,7 +53,6 @@ from .options_parser import (
     extract_option_text,
     extract_option_letter,
 )
-from .validation_logger import log_validation_failure
 from .question_constants import MAX_QUESTION_LENGTH
 from ..models.question_schema import validate_question_schema
 
@@ -247,10 +247,13 @@ def has_grounded_explanation(question: Dict[str, Any]) -> bool:
 # ============================================================================
 
 def _log_failure(question: dict, stage: str, reason: str, metrics_context: MetricsContext = None):
-    if metrics_context:
+    logger.warning(
+        "VALIDATION FAILED | Stage: %s | Reason: %s",
+        stage,
+        reason
+    )
+    if metrics_context and metrics_context.quiz_metrics:
         metrics_context.quiz_metrics.add_failure(stage)
-    else:
-        log_validation_failure(question, stage, reason)
 
 # ============================================================================
 # DISTRACTOR VALIDATION

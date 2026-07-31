@@ -78,8 +78,6 @@ from .question_semantic import (
     validate_semantic,
 )
 
-from .validation_logger import log_validation_failure
-
 from .options_parser import get_correct_text_from_options
 
 from .question_grounding import (
@@ -95,11 +93,6 @@ from .question_validator import (
     validate_question_focus,
     validate_question_uniqueness,
     is_relevant_to_topic,
-)
-
-from .validation_logger import (
-    log_validation_failure,
-    get_metrics,
 )
 
 from .domain_validator import validate_domain_correctness
@@ -369,15 +362,6 @@ class QuizGenerator:
         self._llm_calls += 1
         self._llm_time += duration
 
-    def get_metrics(self) -> Dict[str, Any]:
-        """Return current LLM usage metrics."""
-        return {
-            'llm_calls': self._llm_calls,
-            'llm_time': self._llm_time,
-            'facts_used': len(self._supporting_facts),
-            'questions_generated': len(self._generated_questions)
-        }
-
     # =========================================================================
     # QUALITY CHECK
     # =========================================================================
@@ -446,17 +430,26 @@ class QuizGenerator:
 
             # Inject validation error context if not the first attempt
             current_fact = fact
-            if validation_error_context:
+            if validation_error_context and isinstance(validation_error_context, str):
+                # Ensure validation error is bounded and concise
+                # Using 150 chars to keep the prompt overhead small
+                if len(validation_error_context) > 150:
+                    concise_error = validation_error_context[:147] + "..."
+                else:
+                    concise_error = validation_error_context
+                    
                 # Attempt 3: Simpler fallback prompt
                 if attempt == max_attempts - 1:
-                    current_fact = f"SIMPLIFY: Create an easier question for concept '{answer}'. FACT: {fact}\n\nPREVIOUS ERROR: {validation_error_context}"
+                    current_fact = f"SIMPLIFY: Create an easier question for concept '{answer}'. FACT: {fact}\n\nPREVIOUS ERROR: {concise_error}"
                 else:
-                    current_fact = f"{fact}\n\nPREVIOUS ERROR (CORRECT THIS): {validation_error_context}"
+                    current_fact = f"{fact}\n\nPREVIOUS ERROR (CORRECT THIS): {concise_error}"
+            elif validation_error_context:
+                # Fallback if error is not a string
+                current_fact = f"{fact}\n\nPREVIOUS ERROR (NON-STRING): {str(validation_error_context)[:100]}"
 
             if attempt > 0:
-                metrics = get_metrics(metrics_context)
-                if metrics:
-                    metrics.llm_retry_count += 1
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.llm_retry_count += 1
 
             self._supporting_facts = supporting_facts or []
 
@@ -470,23 +463,24 @@ class QuizGenerator:
                 metrics_context=metrics_context
             )
             
+            print(f"DEBUG: generate_from_fact returned: {question}, error: {error_context}")
+            
             validation_error_context = error_context
 
             if question:
                 if attempt == 0:
-                    metrics = get_metrics(metrics_context)
-                    if metrics:
-                        metrics.accepted_first_try += 1
+                    if metrics_context and metrics_context.quiz_metrics:
+                        metrics_context.quiz_metrics.accepted_first_try += 1
                 else:
-                    metrics = get_metrics(metrics_context)
-                    if metrics:
-                        metrics.accepted_after_retry += 1
+                    if metrics_context and metrics_context.quiz_metrics:
+                        metrics_context.quiz_metrics.accepted_after_retry += 1
                 return question
             print(f"⚠️ Generation attempt {attempt + 1}/{max_attempts} failed: {error_context}")
         
-        metrics = get_metrics(metrics_context)
-        if metrics:
-            metrics.failed_after_max_retries += 1
+        if metrics_context and metrics_context.quiz_metrics:
+            metrics_context.quiz_metrics.failed_after_max_retries += 1
+        
+        logger.error("PIPELINE FAILURE | Stage: max_retries | Reason: Failed after %s attempts. Last error: %s", max_attempts, validation_error_context)
             
         return None
 
@@ -529,6 +523,9 @@ class QuizGenerator:
         sanitized_supporting_fact = sanitize_supporting_fact(supporting_fact, answer)
 
         if not sanitized_supporting_fact:
+            logger.warning("VALIDATION FAILED | Stage: sanitization | Reason: Sanitization failed")
+            if metrics_context and metrics_context.quiz_metrics:
+                metrics_context.quiz_metrics.add_failure("sanitization")
             return None, "Sanitization failed"
 
         fact_for_prompt = sanitized_supporting_fact
@@ -557,6 +554,9 @@ class QuizGenerator:
         ]
 
         if answer_words and len(matched) < max(1, len(answer_words) // 2):
+            logger.warning("VALIDATION FAILED | Stage: grounding | Reason: Answer not grounded in fact")
+            if metrics_context and metrics_context.quiz_metrics:
+                metrics_context.quiz_metrics.add_failure("grounding")
             return None, f"Answer '{answer}' not grounded in fact"
 
         # Build prompt
@@ -588,10 +588,8 @@ class QuizGenerator:
                 duration
             )
 
-            metrics = get_metrics(metrics_context)
-
-            if metrics:
-                metrics.record_llm_call(duration)
+            if metrics_context and metrics_context.quiz_metrics:
+                metrics_context.quiz_metrics.record_llm_call(duration)
                         
             print(f"Fact-based response received: {len(content)} characters")
 
@@ -599,13 +597,17 @@ class QuizGenerator:
             result = self.parser.parse(content)
 
             if result is None:
-                log_validation_failure(None, "json_parse", "Failed to parse LLM response")
+                logger.warning("VALIDATION FAILED | Stage: json_parse | Reason: Failed to parse LLM response")
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("json_parse")
                 return None, "JSON parsing failed"
 
             questions = self.parser.extract_questions(result)
 
             if not questions:
-                log_validation_failure(None, "json_parse", "No questions found")
+                logger.warning("VALIDATION FAILED | Stage: json_parse | Reason: No questions found")
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("json_parse")
                 return None, "No questions extracted from JSON"
 
             question = questions[0]
@@ -687,7 +689,9 @@ class QuizGenerator:
                 return None, "Relevance validation failed"
 
             if question_equals_answer(question.get('question', ''), question.get('options', [])):
-                log_validation_failure(question, "content", "Question restates the answer")
+                logger.warning("VALIDATION FAILED | Stage: content | Reason: Question restates the answer")
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("content")
                 print("DEBUG: question_equals_answer failed")
                 return None, "Question restates the answer"
 
@@ -705,6 +709,9 @@ class QuizGenerator:
                 return None, "Uniqueness validation failed"
 
             if not validate_semantic(question):
+                logger.warning("VALIDATION FAILED | Stage: semantic | Reason: Semantic validation failed")
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("semantic")
                 print("DEBUG: validate_semantic failed")
                 return None, "Semantic validation failed"
 
@@ -725,6 +732,9 @@ class QuizGenerator:
             is_acceptable, score, scores = self._check_quality(question, facts)
 
             if not is_acceptable:
+                logger.warning("VALIDATION FAILED | Stage: quality | Reason: Quality check failed (score: %.2f)", score)
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("quality")
                 print(f"DEBUG: _check_quality failed, score: {score:.2f}")
                 return None, f"Quality check failed (score: {score:.2f})"
 
@@ -822,6 +832,9 @@ class QuizGenerator:
         # ===== HALLUCINATION PREVENTION =====
         # Facts are the ONLY source of truth. No raw context is ever sent to the LLM.
         if not supporting_facts:
+            logger.error("Generation failed: No supporting facts provided.")
+            if metrics_context and metrics_context.quiz_metrics:
+                metrics_context.quiz_metrics.add_failure("generation_failed_no_supporting_facts")
             print("⚠️ No supporting facts provided. Cannot generate grounded questions.")
             return {"questions": []}
 
@@ -837,6 +850,7 @@ class QuizGenerator:
         current_batch = []
 
         for fact_data in generation_pool[:remaining * settings.FACT_MULTIPLIER]:
+            print(f"DEBUG: Processing fact: {fact_data}")
             if not isinstance(fact_data, dict):
                 continue
 
@@ -844,7 +858,11 @@ class QuizGenerator:
             fact_data = normalize_fact(fact_data)
 
             if not fact_data:
+                logger.warning("VALIDATION FAILED | Stage: fact_normalization | Reason: Normalized fact is empty")
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("fact_normalization")
                 continue
+            print(f"DEBUG: Normalized fact: {fact_data}")
 
             concept = fact_data.get("concept", "").strip()
             definition = (
@@ -860,7 +878,12 @@ class QuizGenerator:
                 {"question": definition, "correct_text": concept, "supporting_fact": definition},
                 self.cache.sample(topic=topic, count=100) or []
             ):
+                logger.warning("VALIDATION FAILED | Stage: similarity | Reason: Fact similar to pool")
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("similarity")
+                print(f"DEBUG: Similarity check FAILED")
                 continue
+            print(f"DEBUG: Similarity check PASSED")
 
             # Diversity Check (Soft Filter)
             candidate = {
@@ -873,10 +896,14 @@ class QuizGenerator:
             
             # If batch is still small, don't be too strict
             if len(current_batch) > 1 and diversity_score < 0.4:
+                logger.warning("VALIDATION FAILED | Stage: diversity | Reason: Low diversity score")
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("diversity")
+                print(f"DEBUG: Diversity check FAILED")
                 continue
+            print(f"DEBUG: Diversity check PASSED")
 
             llm_start = time.perf_counter()
-            # ... continue existing generation ...
 
             if not concept or not definition:
                 continue
@@ -892,13 +919,13 @@ class QuizGenerator:
                 question_type=question_type,
                 metrics_context=metrics_context
             )
+            print(f"DEBUG: generate_with_retry returned: {question}")
 
             # Skip fact if fill blank generation failed
             if question is None:
                 continue
 
             if question:
-
                 if question.get("type", "mcq") != "fill_blank":
 
                     print("\nGENERATED QUESTION BEFORE VALIDATION:")
@@ -913,7 +940,16 @@ class QuizGenerator:
                         print("❌ FAILED: distractor validation")
                         continue
 
+                    print(f"DEBUG: Calling validate_semantic")
                     if not validate_semantic(question):
+                        print(f"DEBUG: validation_semantic FAILED")
+                        if metrics_context:
+                            print(f"DEBUG: metrics_context exists")
+                            if metrics_context.quiz_metrics:
+                                print(f"DEBUG: metrics_context.quiz_metrics exists")
+                                metrics_context.quiz_metrics.add_failure("semantic")
+                        else:
+                            print(f"DEBUG: metrics_context is None")
                         print("❌ FAILED: semantic validation")
                         continue
 
@@ -922,6 +958,8 @@ class QuizGenerator:
                         concept,
                         definition
                     ):
+                        if metrics_context and metrics_context.quiz_metrics:
+                            metrics_context.quiz_metrics.add_failure("domain")
                         print("❌ FAILED: domain correctness")
                         continue
 
@@ -930,6 +968,8 @@ class QuizGenerator:
                 if question:
 
                     if question.get("type") not in ["multiple_choice", "fill_blank"]:
+                        if metrics_context and metrics_context.quiz_metrics:
+                            metrics_context.quiz_metrics.add_failure("unsupported_type")
                         print("❌ Skipping unsupported question type")
                         continue
 
@@ -938,6 +978,8 @@ class QuizGenerator:
                         valid_questions,
                         threshold=SIMILARITY_THRESHOLD
                     ):
+                        if metrics_context and metrics_context.quiz_metrics:
+                            metrics_context.quiz_metrics.add_failure("similarity")
                         print("❌ Skipped duplicate during generation")
                         continue
 
@@ -948,6 +990,8 @@ class QuizGenerator:
                     }
 
                     if concept.lower() in existing_concepts:
+                        if metrics_context and metrics_context.quiz_metrics:
+                            metrics_context.quiz_metrics.add_failure("duplicate_concept")
                         print(
                             f"❌ Duplicate concept skipped: {concept}"
                         )

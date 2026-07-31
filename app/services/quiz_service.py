@@ -79,7 +79,6 @@ from app.utils.question_id import generate_question_id
 
 
 from ..monitoring.performance_monitor import PerformanceMonitor
-from ..quiz.validation_logger import set_metrics, get_metrics
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -167,7 +166,6 @@ class QuizService:
 
         metrics = QuizMetrics(topic=topic)
         metrics_context = MetricsContext(quiz_metrics=metrics, topic=topic)
-        set_metrics(metrics) # Maintain backward compatibility for now
 
         metrics.questions_requested = count
         overall_start = time.perf_counter()
@@ -183,6 +181,7 @@ class QuizService:
 
         if not notes:
             logger.error(f"No notes found for topic: {topic}")
+            metrics.add_failure("generation_failed_no_notes")
             return []
 
         stage = time.perf_counter()
@@ -195,6 +194,10 @@ class QuizService:
         stage = time.perf_counter()
         extracted_facts = self._extract_facts_from_notes(ranked_notes, topic)
         metrics.facts_extracted = len(extracted_facts)
+        if not extracted_facts:
+            logger.error(f"No facts extracted for topic: {topic}")
+            metrics.add_failure("generation_failed_no_facts_extracted")
+            return []
         logger.info(
             "PROFILE | Fact extraction: %.3fs",
             time.perf_counter() - stage,
@@ -382,9 +385,12 @@ class QuizService:
 
         performance_data = performance_monitor.stop()
 
-        metrics = get_metrics()
+        # Define metrics context if not already available
+        metrics = QuizMetrics(topic=topic)
+        metrics_context = MetricsContext(quiz_metrics=metrics, topic=topic)
 
-        if metrics:
+        if metrics_context and metrics_context.quiz_metrics:
+            metrics = metrics_context.quiz_metrics
             metrics.record_cpu(
                 performance_data["cpu_usage_percent"]
             )
@@ -723,20 +729,22 @@ class QuizService:
                 fact_data=fact_data,
                 supporting_facts=facts,
                 question_type=question_type,
+                metrics_context=metrics_context
             )
 
             llm_duration = time.perf_counter() - llm_start
 
-            metrics = get_metrics()
-
-            if metrics:
-                metrics.record_llm_call(llm_duration)
+            if metrics_context and metrics_context.quiz_metrics:
+                metrics_context.quiz_metrics.record_llm_call(llm_duration)
 
             if question:
                 questions.append(question)
 
-                if metrics:
-                    metrics.facts_used += 1
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.facts_used += 1
+            else:
+                if metrics_context and metrics_context.quiz_metrics:
+                    metrics_context.quiz_metrics.add_failure("generation_failed_retry_exhaustion")
 
         # ---------- Fill Blank ----------
         fill_blank = self.quiz_generator.generate_fill_blank(

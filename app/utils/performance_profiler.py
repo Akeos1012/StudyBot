@@ -129,12 +129,3 @@ def get_performance_metrics() -> Dict[str, Any]:
 # ============================================================
 # RESET
 # ============================================================
-
-def reset_metrics():
-    """
-    Clear stored metrics.
-    Useful for testing.
-    """
-
-    _metrics["calls"].clear()
-    _metrics["total_time"].clear()

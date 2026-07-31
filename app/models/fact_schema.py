@@ -689,6 +689,7 @@ def normalize_fact(fact: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "weight": fact.get("weight", 5),
         "is_header": fact.get("is_header", False),
         "is_bullet": fact.get("is_bullet", False),
+        "fact_id": fact.get("fact_id", f"fact_{abs(hash(concept + definition))}"),
     }
 
 

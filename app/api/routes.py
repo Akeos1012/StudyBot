@@ -5,11 +5,13 @@ This module contains HTTP endpoint handlers.
 Business logic is delegated to services.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
+from app.models.user_context import UserContext
 from app.models.api_schema import (
     QuizRequest,
     FillBlankRequest,
@@ -22,7 +24,11 @@ def setup_routes(quiz_service, metadata_loader, metadata):
     router = APIRouter()
     # ...
     @router.post("/quiz/generate", response_model=QuizResponse)
-    async def generate_quiz(request: QuizRequest, background_tasks: BackgroundTasks):
+    async def generate_quiz(
+        request: QuizRequest,
+        background_tasks: BackgroundTasks,
+        user_id: Optional[str] = Header(None, alias="X-User-ID")
+    ):
 
         try:
             topic = request.topic
@@ -31,6 +37,8 @@ def setup_routes(quiz_service, metadata_loader, metadata):
             count = request.count
             difficulty = request.difficulty
             fresh = request.fresh
+            
+            user_context = UserContext(user_id=user_id)
 
             # Proactive Pool Management
             pool_manager = quiz_service.pool_manager
@@ -47,6 +55,8 @@ def setup_routes(quiz_service, metadata_loader, metadata):
                 count=count,
                 fresh=fresh,
                 question_type="multiple",
+                user_context=user_context,
+                adaptive=request.adaptive,
             )
 
             if not questions:
@@ -129,11 +139,16 @@ def setup_routes(quiz_service, metadata_loader, metadata):
         "/quiz/submit-answer",
         response_model=AnswerResponse
     )
-    async def submit_answer(request: AnswerSubmission):
-
+    async def submit_answer(
+        request: AnswerSubmission,
+        user_id: Optional[str] = Header(None, alias="X-User-ID")
+    ):
+        user_context = UserContext(user_id=user_id)
+        
         result = quiz_service.record_answer(
             request.question_id,
-            request.answer
+            request.answer,
+            user_context=user_context
         )
 
         return result

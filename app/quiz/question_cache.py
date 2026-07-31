@@ -324,7 +324,8 @@ class QuestionCache:
 
     def _adaptive_score(
         self,
-        q: Dict[str, Any]
+        q: Dict[str, Any],
+        concept_weights: Optional[Dict[str, int]] = None
     ) -> float:
         """
         Calculate priority for adaptive question selection.
@@ -366,6 +367,11 @@ class QuestionCache:
         # Prefer questions not recently seen
         if not q.get("last_seen"):
             score += 2
+        
+        # Apply concept weights
+        if concept_weights:
+            concept = q.get("concept")
+            score += concept_weights.get(concept, 0)
 
         return score
 
@@ -376,6 +382,7 @@ class QuestionCache:
         difficulty: str = "medium",
         qtype: str = "multiple_choice",
         count: int = 3,
+        concept_weights: Optional[Dict[str, int]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Randomly sample questions from the pool.
@@ -386,6 +393,7 @@ class QuestionCache:
             difficulty: Question difficulty
             qtype: Question type
             count: Number of questions to sample
+            concept_weights: Optional dictionary of concept-based priority weights
 
         Returns:
             List of sampled questions, or None if pool is too small
@@ -396,9 +404,10 @@ class QuestionCache:
             logger.info("Pool empty")
             return None
 
+        # Pass concept_weights to _adaptive_score
         selected = sorted(
             pool,
-            key=self._adaptive_score,
+            key=lambda q: self._adaptive_score(q, concept_weights=concept_weights),
             reverse=True
         )[:count]
 

@@ -7,6 +7,7 @@ from app.quiz.question_cache import QuestionCache
 from app.rag.fact_cache import FactCache
 from app.quiz.llm_client import LLMClient
 from app.rag.metadata_loader import MetadataLoader
+from app.learning.history_service import HistoryService
 
 
 @pytest.fixture
@@ -105,6 +106,7 @@ def metadata_loader(tmp_path):
 from app.quiz.pool_manager import PoolManager
 from app.monitoring.pool_metrics import PoolMetrics
 from app.rag.retriever import Retriever
+from app.learning.mastery_service import MasteryService
 
 @pytest.fixture
 def quiz_service(
@@ -123,16 +125,19 @@ def quiz_service(
     pool_manager = PoolManager(
         cache=question_cache,
         generator=generator,
-        retriever=Retriever(fact_cache=test_fact_cache),
+        retriever=Retriever(fact_cache=test_fact_cache),  
         pool_metrics=PoolMetrics()
     )
 
     return QuizService(
         metadata_loader=metadata_loader,
         quiz_generator=generator,
-        pool_manager=pool_manager
+        pool_manager=pool_manager,
+        mastery_service=MagicMock(spec=MasteryService),
+        history_service=MagicMock(spec=HistoryService),
+        analytics_service=MagicMock(),
+        recommendation_engine=MagicMock()
     )
-
 
 def test_full_pipeline_orchestration(quiz_service):
 

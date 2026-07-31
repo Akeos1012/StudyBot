@@ -11,6 +11,7 @@ from app.rag.retriever import Retriever
 from app.rag.fact_cache import FactCache
 from app.rag.metadata_loader import MetadataLoader
 from app.monitoring.pool_metrics import PoolMetrics
+from app.learning.mastery_service import MasteryService
 
 # Mock deterministic LLM response that passes validators
 MOCK_LLM_RESPONSE = json.dumps({
@@ -67,7 +68,11 @@ def pipeline_setup(temp_cache, mocked_llm):
     service = QuizService(
         metadata_loader=MagicMock(spec=MetadataLoader),
         quiz_generator=generator,
-        pool_manager=pool_manager
+        pool_manager=pool_manager,
+        mastery_service=MagicMock(spec=MasteryService),
+        history_service=MagicMock(),
+        analytics_service=MagicMock(),
+        recommendation_engine=MagicMock()
     )
     
     return service, pool_manager, temp_cache, generator

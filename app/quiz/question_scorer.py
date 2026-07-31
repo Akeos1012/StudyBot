@@ -201,6 +201,16 @@ class QuestionScorer:
         """
         total, scores, issues = self.score_question(question, facts)
         is_acceptable = total >= self.min_acceptable_score
+        
+        if not is_acceptable:
+            logger.warning(
+                "Question rejected. Total score: %.2f. Issues: %s. Component Scores: %s. Question: %s",
+                total,
+                issues,
+                scores,
+                question,
+            )
+            
         return is_acceptable, total, scores, issues
 
     def get_detailed_report(

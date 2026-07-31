@@ -59,7 +59,7 @@
 import time
 import logging
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from ..rag.grounding_processor import GroundingProcessor
 from ..rag.metadata_loader import MetadataLoader
@@ -69,7 +69,14 @@ from ..quiz.pool_manager import PoolManager
 from ..monitoring.quiz_metrics import QuizMetrics
 from ..monitoring.metrics_context import MetricsContext
 from ..quiz.question_metadata import update_answer_result
+from app.models.user_context import UserContext
+from app.learning.mastery_service import MasteryService
+from app.learning.history_service import HistoryService
+from app.learning.analytics_service import LearningAnalyticsService
+from app.learning.recommendation_engine import RecommendationEngine
+from app.utils.question_id import generate_question_id
 # ...
+
 
 from ..monitoring.performance_monitor import PerformanceMonitor
 from ..quiz.validation_logger import set_metrics, get_metrics
@@ -126,10 +133,24 @@ class QuizService:
         Changes here affect the entire quiz workflow.
     """
 
-    def __init__(self, metadata_loader: MetadataLoader, quiz_generator: QuizGenerator, pool_manager: PoolManager):
+    def __init__(
+        self, 
+        metadata_loader: MetadataLoader, 
+        quiz_generator: QuizGenerator, 
+        pool_manager: PoolManager, 
+        mastery_service: MasteryService, 
+        history_service: HistoryService,
+        analytics_service: LearningAnalyticsService,
+        recommendation_engine: RecommendationEngine
+    ):
         self.metadata_loader = metadata_loader
         self.quiz_generator = quiz_generator
         self.pool_manager = pool_manager
+        self.mastery_service = mastery_service
+        self.history_service = history_service
+        self.analytics_service = analytics_service
+        self.recommendation_engine = recommendation_engine
+
 
     def generate_questions_for_topic(
         self,
@@ -137,6 +158,7 @@ class QuizService:
         subtopic: str = "",
         difficulty: str = "medium",
         count: int = 15,
+        user_context: Optional[UserContext] = None,
     ) -> List[Dict[str, Any]]:
         """
         Generate questions for a topic.
@@ -144,7 +166,8 @@ class QuizService:
         logger.info(f"Generating {count} questions for topic: {topic}")
 
         metrics = QuizMetrics(topic=topic)
-        set_metrics(metrics)
+        metrics_context = MetricsContext(quiz_metrics=metrics, topic=topic)
+        set_metrics(metrics) # Maintain backward compatibility for now
 
         metrics.questions_requested = count
         overall_start = time.perf_counter()
@@ -183,6 +206,7 @@ class QuizService:
             topic,
             count,
             "multiple",
+            metrics_context=metrics_context
         )
 
         logger.info(
@@ -217,7 +241,7 @@ class QuizService:
         for q in questions:
             q["topic"] = topic
             q["subtopic"] = subtopic
-            q["question_id"] = str(hash(q.get("question", "")))
+            q["question_id"] = generate_question_id(q.get("question", ""))
 
         for q in questions:
             q["difficulty"] = difficulty
@@ -236,11 +260,21 @@ class QuizService:
         count: int = 3,
         fresh: bool = False,
         question_type: str = "multiple",
+        user_context: Optional[UserContext] = None,
+        adaptive: bool = False,
+        personalize: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve questions from cache or generate new ones.
         """
         start_time = time.time()
+
+        # Adaptive difficulty logic
+        if adaptive and user_context and user_context.user_id:
+            recommended_difficulty = self.mastery_service.get_recommended_difficulty(user_context, topic)
+            if recommended_difficulty:
+                logger.info(f"Adaptive difficulty active: overriding {difficulty} with {recommended_difficulty}")
+                difficulty = recommended_difficulty
 
         logger.info(
             "Generating quiz | topic=%s fresh=%s count=%s",
@@ -253,6 +287,11 @@ class QuizService:
         performance_monitor.start()
 
         cache = self.quiz_generator.cache
+        
+        concept_weights = None
+        if personalize and user_context and user_context.user_id:
+            summary = self.analytics_service.get_learning_summary(user_context, topic)
+            concept_weights = self.recommendation_engine.get_concept_weights(summary)
 
         if fresh:
             logger.info(f"Clearing cache for {topic}")
@@ -282,7 +321,8 @@ class QuizService:
                 subtopic,
                 difficulty,
                 question_type,
-                count
+                count,
+                concept_weights=concept_weights
             )
             if cached_questions and len(cached_questions) >= count:
                 logger.info(
@@ -303,7 +343,8 @@ class QuizService:
             topic,
             subtopic,
             difficulty,
-            max(count, POOL_REFILL_AMOUNT)
+            max(count, POOL_REFILL_AMOUNT),
+            user_context=user_context
         )
 
 
@@ -374,14 +415,15 @@ class QuizService:
         for q in result:
             q["topic"] = topic
             q["subtopic"] = subtopic
-            q["question_id"] = str(hash(q.get("question", "")))
+            q["question_id"] = generate_question_id(q.get("question", ""))
 
         return result
 
     def record_answer(
         self,
         question_id: str,
-        answer: str
+        answer: str,
+        user_context: Optional[UserContext] = None,
     ):
         cache = self.quiz_generator.cache
 
@@ -410,6 +452,11 @@ class QuizService:
             question_id,
             question
         )
+
+        # Update mastery
+        if user_context and user_context.user_id:
+            concept = question.get("concept") or question.get("topic", "General")
+            self.mastery_service.update_mastery(user_context, concept, correct)
 
         return {
             "success": True,
@@ -644,6 +691,7 @@ class QuizService:
         topic: str,
         target_count: int,
         question_type: str = "multiple",
+        metrics_context: Optional[MetricsContext] = None
     ) -> List[Dict[str, Any]]:
 
         questions = []

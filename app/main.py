@@ -15,6 +15,12 @@ from .monitoring.pool_metrics import PoolMetrics
 from .rag.retriever import Retriever
 from .services.quiz_service import QuizService
 from .api.routes import setup_routes
+from .learning.mastery_service import MasteryService
+from .learning.mastery_storage import MasteryStorage
+from .learning.history_service import HistoryService
+from .learning.history_storage import HistoryStorage
+from .learning.analytics_service import LearningAnalyticsService
+from .learning.recommendation_engine import RecommendationEngine
 
 # Create FastAPI app
 app = FastAPI(title="AI Study Companion")
@@ -50,11 +56,21 @@ pool_manager = PoolManager(
     pool_metrics=pool_metrics
 )
 
+history_storage = HistoryStorage()
+history_service = HistoryService(storage=history_storage)
+mastery_storage = MasteryStorage()
+mastery_service = MasteryService(storage=mastery_storage)
+analytics_service = LearningAnalyticsService(mastery_storage=mastery_storage, history_storage=history_storage)
+recommendation_engine = RecommendationEngine()
 
 quiz_service = QuizService(
     metadata_loader=metadata_loader, 
     quiz_generator=quiz_generator,
-    pool_manager=pool_manager
+    pool_manager=pool_manager,
+    mastery_service=mastery_service,
+    history_service=history_service,
+    analytics_service=analytics_service,
+    recommendation_engine=recommendation_engine
 )
 
 

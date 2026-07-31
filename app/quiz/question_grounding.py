@@ -16,12 +16,19 @@ from .question_constants import (
 
 from .question_explanation import build_consistent_explanation
 from .validation_logger import log_validation_failure
+from app.monitoring.metrics_context import MetricsContext
 
 logger = logging.getLogger(__name__)
 
+def _log_failure(question: Dict[str, Any], stage: str, reason: str, extra: Dict[str, Any] = None, metrics_context: MetricsContext = None):
+    if metrics_context:
+        metrics_context.quiz_metrics.add_failure(stage)
+    else:
+        log_validation_failure(question, stage, reason, extra)
+
 
 def validate_grounding(
-    question: Dict[str, Any], context: str, supporting_fact: str = ""
+    question: Dict[str, Any], context: str, supporting_fact: str = "", metrics_context: MetricsContext = None
 ) -> bool:
     """
     Check if the correct answer is grounded in the note-backed context.
@@ -35,19 +42,20 @@ def validate_grounding(
     correct_text = get_correct_text_from_options(options, correct_letter)
 
     if not correct_text:
-        log_validation_failure(
+        _log_failure(
             question,
             "grounding",
             "Could not extract correct text from options",
             {"correct_letter": correct_letter},
+            metrics_context
         )
         return False
 
     # Prefer supporting_fact, fallback to context
     grounding_context = f"{supporting_fact}\n{context}"
     if not grounding_context:
-        log_validation_failure(
-            question, "grounding", "No context provided for grounding check"
+        _log_failure(
+            question, "grounding", "No context provided for grounding check", metrics_context=metrics_context
         )
         return False
 
@@ -198,7 +206,7 @@ def validate_grounding(
                 if overlap >= 0.75 and len(matched_words) >= 2:
                     return True
 
-    log_validation_failure(
+    _log_failure(
         question,
         "grounding",
         "Correct answer not found in context",
@@ -207,6 +215,7 @@ def validate_grounding(
             "context_preview": grounding_context[:100] + "...",
             "correct_words": correct_words[:3],
         },
+        metrics_context
     )
     return False
 
@@ -216,9 +225,9 @@ def explanation_supported_by_fact(
     correct_text: str,
 ) -> bool:
     """
-    Returns True if the explanation is actually supported by the note-backed fact.
+    Returns True if the explanation is supported by the supporting fact.
+    Prioritizes coverage of factual keywords over explanation length.
     """
-
     if not explanation or not supporting_fact:
         return False
 
@@ -226,32 +235,28 @@ def explanation_supported_by_fact(
     fact_lower = supporting_fact.lower()
     correct_lower = correct_text.lower()
 
-    # Explanation should mention the correct concept or concept root stem
+    # Requirement 2 & 3: Concept verification
     correct_words = [w for w in correct_lower.split() if len(w) >= 3 and w not in STOP_WORDS]
-    concept_in_exp = correct_lower in exp_lower or any(
-        w in exp_lower or (len(w) >= 5 and w[:5] in exp_lower)
-        for w in correct_words
-    )
-    if not concept_in_exp:
+    if not (correct_lower in exp_lower or any(w in exp_lower for w in correct_words)):
         return False
 
-    fact_words = {
-        w for w in re.findall(r"\w+", fact_lower)
-        if len(w) > 3 and w not in STOP_WORDS
-    }
+    # Tokenize with same rules
+    fact_tokens = {w for w in re.findall(r"\w+", fact_lower) if len(w) > 3 and w not in STOP_WORDS}
+    exp_tokens = {w for w in re.findall(r"\w+", exp_lower) if len(w) > 3 and w not in STOP_WORDS}
 
-    explanation_words = {
-        w for w in re.findall(r"\w+", exp_lower)
-        if len(w) > 3 and w not in STOP_WORDS
-    }
-
-    if not fact_words or not explanation_words:
+    if not fact_tokens:
         return False
 
-    common = fact_words & explanation_words
-    overlap = len(common) / len(explanation_words)
+    # Requirement 5: Fact keyword coverage
+    common = fact_tokens & exp_tokens
+    
+    # Coverage: what fraction of the fact's unique keywords are used in the explanation?
+    coverage = len(common) / len(fact_tokens)
 
-    return overlap >= 0.30 or len(common) >= 2
+    # Requirement 4: Allow expanded educational explanations
+    # Requirement 1: Hallucination detection (ensure significant keyword overlap)
+    # Stricter combination: coverage must be at least 40% AND have at least 3 strong matches
+    return coverage >= 0.40 and len(common) >= 3
 
 def is_valid_explanation(
     explanation: str,

@@ -9,6 +9,7 @@ class QuizRequest(BaseModel):
     difficulty: str = "medium"
     count: int = Field(default=3, ge=1, le=50)
     fresh: bool = False
+    adaptive: bool = False
 
 
 class FillBlankRequest(BaseModel):

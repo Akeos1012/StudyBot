@@ -20,9 +20,9 @@ def service(mock_cache):
         mastery_service=MagicMock(spec=MasteryService),
         history_service=MagicMock(spec=HistoryService),
         analytics_service=MagicMock(spec=LearningAnalyticsService),
-        recommendation_engine=MagicMock(spec=RecommendationEngine)
+        recommendation_engine=MagicMock(spec=RecommendationEngine),
+        quiz_session_service=MagicMock()
     )
-
 def test_personalization_disabled(service, mock_cache):
     # Call with personalize=False
     service.get_or_generate_questions(topic="test", personalize=False)

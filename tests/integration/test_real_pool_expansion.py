@@ -72,7 +72,8 @@ def pipeline_setup(temp_cache, mocked_llm):
         mastery_service=MagicMock(spec=MasteryService),
         history_service=MagicMock(),
         analytics_service=MagicMock(),
-        recommendation_engine=MagicMock()
+        recommendation_engine=MagicMock(),
+        quiz_session_service=MagicMock()
     )
     
     return service, pool_manager, temp_cache, generator

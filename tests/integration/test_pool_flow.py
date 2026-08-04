@@ -28,7 +28,8 @@ def integration_setup(tmp_path):
         mastery_service=mastery_service,
         history_service=history_service,
         analytics_service=analytics_service,
-        recommendation_engine=recommendation_engine
+        recommendation_engine=recommendation_engine,
+        quiz_session_service=MagicMock()
     )
     
     return service, pool_manager, question_cache, generator, retriever, history_service

@@ -15,33 +15,7 @@ export const api = {
   },
 
 
-  // Generate multiple choice quiz
-  async generateQuiz({
-    topic,
-    subtopic = "",
-    count = 3,
-    difficulty = "medium",
-    fresh = false
-  }) {
-    const response = await fetch(
-      `${API_URL}/quiz/generate`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          topic,
-          subtopic,
-          count,
-          difficulty,
-          fresh
-        })
-      }
-    );
 
-    return response.json();
-  },
 
 
   // Generate fill in the blank quiz

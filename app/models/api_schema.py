@@ -1,8 +1,6 @@
 from typing import Optional, List, Any
 from pydantic import BaseModel, Field
 
-
-
 class QuizRequest(BaseModel):
     topic: str = "Database"
     subtopic: Optional[str] = ""
@@ -11,7 +9,6 @@ class QuizRequest(BaseModel):
     fresh: bool = False
     adaptive: bool = False
 
-
 class FillBlankRequest(BaseModel):
     topic: str = "Database"
     subtopic: Optional[str] = ""
@@ -19,11 +16,9 @@ class FillBlankRequest(BaseModel):
     count: int = Field(default=3, ge=1, le=50)
     fresh: bool = False
 
-
 class AnswerSubmission(BaseModel):
     question_id: str
     answer: str
-
 
 class AnswerResponse(BaseModel):
     success: bool = True
@@ -31,6 +26,9 @@ class AnswerResponse(BaseModel):
     correct: bool
     success_rate: float
 
+class ReviewRequest(BaseModel):
+    question_id: str
+    user_answer: str
 
 class QuestionResponse(BaseModel):
     topic: Optional[str] = None
@@ -59,11 +57,50 @@ class QuizResponse(BaseModel):
     questions: List[QuestionResponse]
     source_notes: List[str]
 
-
 class TopicResponse(BaseModel):
     topics: List[str]
-
 
 class NotesResponse(BaseModel):
     topic: str
     notes: List[dict]
+
+class Recommendation(BaseModel):
+    topic: str
+    reason: str
+    priority: str
+    suggested_action: str
+
+class RecommendationResponse(BaseModel):
+    recommendations: List[Recommendation]
+
+class MasteryResponse(BaseModel):
+    overall_mastery: float
+    total_attempts: int
+    concepts_tracked: int
+    last_updated: Optional[str] = None
+
+class ProgressResponse(BaseModel):
+    total_questions_answered: int
+    correct_answers: int
+    accuracy_percentage: float
+    topics_studied: List[str]
+
+class WeakTopicResponse(BaseModel):
+    topic: str
+    mastery: float
+    priority: str
+
+class AnalyticsSummaryResponse(BaseModel):
+    mastery: MasteryResponse
+    progress: ProgressResponse
+    weak_topics: List[WeakTopicResponse]
+
+class TrendData(BaseModel):
+    date: str
+    accuracy: float
+    mastery: float
+
+class TrendResponse(BaseModel):
+    period: str
+    trend: List[TrendData]
+    direction: str

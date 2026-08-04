@@ -18,6 +18,8 @@ Requires sentence-transformers for embedding search.
 
 from typing import List, Dict, Any, Optional
 import logging
+from app.models.tutor_schema import NormalizedQuery
+from app.models.retrieved_context import RetrievedContext
 
 # Optional semantic search dependency
 try:
@@ -44,12 +46,6 @@ class Retriever:
             difficulty="medium",
             limit=10
         )
-
-    Future usage:
-
-        facts = retriever.query(
-            "cloud storage services"
-        )
     """
 
     def __init__(self, fact_cache=None, use_embeddings: bool = False):
@@ -62,6 +58,65 @@ class Retriever:
 
         if self.use_embeddings:
             self._init_embeddings()
+
+    def search(self, query: NormalizedQuery) -> RetrievedContext:
+        """
+        Deterministic hybrid search against FactCache.
+        """
+        if not self.fact_cache:
+            return RetrievedContext(found=False, facts=[], concepts=[], topics=[], sources=[], supporting_facts=[])
+
+        all_facts = []
+        for topic in self.fact_cache.get_topics():
+            all_facts.extend(self.fact_cache.get_facts(topic))
+
+        scored_facts = []
+        for fact in all_facts:
+            score = 0.0
+            
+            # 1. Exact Concept Match (Weight 10)
+            if any(concept.lower() == fact.get("concept", "").lower() for concept in query.extracted_concepts):
+                score += 10.0
+            
+            # 2. Keyword Match in Concept (Weight 5)
+            fact_concept = fact.get("concept", "").lower()
+            if any(kw in fact_concept for kw in query.keywords):
+                score += 5.0
+
+            # 3. Keyword Match in Supporting Fact (Weight 2)
+            fact_def = fact.get("definition", "").lower()
+            if any(kw in fact_def for kw in query.keywords):
+                score += 2.0
+                
+            # 4. Topic Match (Weight 1)
+            if fact.get("topic", "").lower() in [kw.lower() for kw in query.keywords]:
+                score += 1.0
+            
+            if score > 0:
+                scored_facts.append((score, fact))
+
+        # Sort by score descending, then by original weight
+        scored_facts.sort(key=lambda x: (x[0], x[1].get("weight", 0)), reverse=True)
+        
+        top_facts = [f for _, f in scored_facts[:10]]
+        
+        if not top_facts:
+            return RetrievedContext(found=False, facts=[], concepts=[], topics=[], sources=[], supporting_facts=[])
+
+        # Extract unique metadata for context
+        concepts = sorted(list(set(f.get("concept") for f in top_facts if f.get("concept"))))
+        topics = sorted(list(set(f.get("topic") for f in top_facts if f.get("topic"))))
+        sources = sorted(list(set(f.get("source") for f in top_facts if f.get("source"))))
+        supporting_facts = [f.get("definition") for f in top_facts if f.get("definition")]
+
+        return RetrievedContext(
+            found=True,
+            facts=top_facts,
+            concepts=concepts,
+            topics=topics,
+            sources=sources,
+            supporting_facts=supporting_facts
+        )
 
     # =========================================================
     # PHASE 1 RETRIEVAL

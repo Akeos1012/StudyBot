@@ -12,11 +12,12 @@ def mock_dependencies():
     history_service = MagicMock()
     analytics_service = MagicMock()
     recommendation_engine = MagicMock()
-    return metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine
+    quiz_session_service = MagicMock()
+    return metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine, quiz_session_service
 
 def test_healthy_pool_no_expansion(mock_dependencies):
-    metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine = mock_dependencies
-    service = QuizService(metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine)
+    metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine, quiz_session_service = mock_dependencies
+    service = QuizService(metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine, quiz_session_service)
     
     # Mock healthy pool
     pool_manager.should_expand_pool.return_value = {"expand": False}
@@ -33,8 +34,8 @@ def test_healthy_pool_no_expansion(mock_dependencies):
     assert quiz_generator.cache.sample.called
 
 def test_unhealthy_pool_expansion_triggered(mock_dependencies):
-    metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine = mock_dependencies
-    service = QuizService(metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine)
+    metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine, quiz_session_service = mock_dependencies
+    service = QuizService(metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine, quiz_session_service)
     
     # Mock unhealthy pool
     pool_manager.should_expand_pool.return_value = {"expand": True}
@@ -51,8 +52,8 @@ def test_unhealthy_pool_expansion_triggered(mock_dependencies):
     assert quiz_generator.cache.sample.called
 
 def test_pool_manager_failure_fallback(mock_dependencies):
-    metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine = mock_dependencies
-    service = QuizService(metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine)
+    metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine, quiz_session_service = mock_dependencies
+    service = QuizService(metadata_loader, quiz_generator, pool_manager, mastery_service, history_service, analytics_service, recommendation_engine, quiz_session_service)
     
     # Mock failure
     pool_manager.should_expand_pool.side_effect = Exception("Service unavailable")

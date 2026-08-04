@@ -59,22 +59,27 @@
 import time
 import logging
 import random
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from ..rag.grounding_processor import GroundingProcessor
+from ..learning.analytics.analytics_repository import AnalyticsRepository
 from ..rag.metadata_loader import MetadataLoader
 from ..rag.fact_extractor import FactExtractor
 from ..quiz.quiz_generator import QuizGenerator
+from app.services.quiz_session_service import QuizSessionService
 from ..quiz.pool_manager import PoolManager
 from ..monitoring.quiz_metrics import QuizMetrics
 from ..monitoring.metrics_context import MetricsContext
 from ..quiz.question_metadata import update_answer_result
 from app.models.user_context import UserContext
+from app.models.quiz_session import QuizSession, SessionStatus
 from app.learning.mastery_service import MasteryService
 from app.learning.history_service import HistoryService
 from app.learning.analytics_service import LearningAnalyticsService
 from app.learning.recommendation_engine import RecommendationEngine
 from app.utils.question_id import generate_question_id
+
 # ...
 
 
@@ -133,14 +138,16 @@ class QuizService:
     """
 
     def __init__(
-        self, 
-        metadata_loader: MetadataLoader, 
-        quiz_generator: QuizGenerator, 
-        pool_manager: PoolManager, 
-        mastery_service: MasteryService, 
-        history_service: HistoryService,
-        analytics_service: LearningAnalyticsService,
-        recommendation_engine: RecommendationEngine
+        self,
+        metadata_loader,
+        quiz_generator,
+        pool_manager,
+        mastery_service,
+        history_service,
+        analytics_service,
+        recommendation_engine,
+        quiz_session_service,
+        analytics_repository=None,
     ):
         self.metadata_loader = metadata_loader
         self.quiz_generator = quiz_generator
@@ -149,7 +156,37 @@ class QuizService:
         self.history_service = history_service
         self.analytics_service = analytics_service
         self.recommendation_engine = recommendation_engine
+        self.quiz_session_service = quiz_session_service
+        self.analytics_repository = analytics_repository
 
+    def create_quiz_session(
+        self,
+        user_id: str,
+        topic: str,
+        difficulty: str = "medium",
+        count: int = 3,
+        fresh: bool = False,
+        adaptive: bool = False,
+    ) -> QuizSession:
+        questions = self.get_or_generate_questions(
+            topic=topic,
+            difficulty=difficulty,
+            count=count,
+            fresh=fresh,
+            adaptive=adaptive,
+            user_context=UserContext(user_id=user_id),
+        )
+        
+        question_ids = [q["question_id"] for q in questions]
+        session = self.quiz_session_service.create_session(
+            user_id=user_id, topic=topic, difficulty=difficulty, question_ids=question_ids
+        )
+        
+        # Inject session_id into questions
+        for q in questions:
+            q.setdefault("metadata", {})["session_id"] = session.session_id
+            
+        return session
 
     def generate_questions_for_topic(
         self,
@@ -205,11 +242,7 @@ class QuizService:
 
         stage = time.perf_counter()
         questions = self._generate_from_facts(
-            extracted_facts,
-            topic,
-            count,
-            "multiple",
-            metrics_context=metrics_context
+            extracted_facts, topic, count, "multiple", metrics_context=metrics_context
         )
 
         logger.info(
@@ -274,23 +307,22 @@ class QuizService:
 
         # Adaptive difficulty logic
         if adaptive and user_context and user_context.user_id:
-            recommended_difficulty = self.mastery_service.get_recommended_difficulty(user_context, topic)
+            recommended_difficulty = self.mastery_service.get_recommended_difficulty(
+                user_context, topic
+            )
             if recommended_difficulty:
-                logger.info(f"Adaptive difficulty active: overriding {difficulty} with {recommended_difficulty}")
+                logger.info(
+                    f"Adaptive difficulty active: overriding {difficulty} with {recommended_difficulty}"
+                )
                 difficulty = recommended_difficulty
 
-        logger.info(
-            "Generating quiz | topic=%s fresh=%s count=%s",
-            topic,
-            fresh,
-            count
-        )
+        logger.info("Generating quiz | topic=%s fresh=%s count=%s", topic, fresh, count)
 
         performance_monitor = PerformanceMonitor()
         performance_monitor.start()
 
         cache = self.quiz_generator.cache
-        
+
         concept_weights = None
         if personalize and user_context and user_context.user_id:
             summary = self.analytics_service.get_learning_summary(user_context, topic)
@@ -302,10 +334,7 @@ class QuizService:
 
         if question_type == "fillblank":
             return self.generate_fill_blank_questions(
-                topic=topic,
-                subtopic=subtopic,
-                difficulty=difficulty,
-                count=count
+                topic=topic, subtopic=subtopic, difficulty=difficulty, count=count
             )
 
         # Proactive Pool Management
@@ -325,21 +354,19 @@ class QuizService:
                 difficulty,
                 question_type,
                 count,
-                concept_weights=concept_weights
+                concept_weights=concept_weights,
             )
             if cached_questions and len(cached_questions) >= count:
                 logger.info(
                     "Serving %d cached questions from pool for topic '%s'",
                     len(cached_questions),
-                    topic
+                    topic,
                 )
                 return cached_questions
 
         # Generate fresh questions if cache bypass requested or pool is depleted
         logger.info(
-            "Generating fresh questions for topic '%s' (fresh=%s)",
-            topic,
-            fresh
+            "Generating fresh questions for topic '%s' (fresh=%s)", topic, fresh
         )
 
         new_questions = self.generate_questions_for_topic(
@@ -347,15 +374,10 @@ class QuizService:
             subtopic,
             difficulty,
             max(count, POOL_REFILL_AMOUNT),
-            user_context=user_context
+            user_context=user_context,
         )
 
-
-        real_questions = [
-            q for q in new_questions
-            if not q.get("_is_fallback", False)
-        ]
-
+        real_questions = [q for q in new_questions if not q.get("_is_fallback", False)]
 
         if real_questions:
 
@@ -364,21 +386,12 @@ class QuizService:
             for q in real_questions:
                 q_type = q.get("question_type", "multiple")
 
-                result = cache.add_to_pool(
-                    topic,
-                    subtopic,
-                    difficulty,
-                    q_type,
-                    [q]
-                )
+                result = cache.add_to_pool(topic, subtopic, difficulty, q_type, [q])
 
                 if result:
                     added += result
 
-            logger.info(
-                "Added %s new questions into pool",
-                added
-            )
+            logger.info("Added %s new questions into pool", added)
 
         # Return only new questions
         result = real_questions[:count]
@@ -391,32 +404,19 @@ class QuizService:
 
         if metrics_context and metrics_context.quiz_metrics:
             metrics = metrics_context.quiz_metrics
-            metrics.record_cpu(
-                performance_data["cpu_usage_percent"]
-            )
+            metrics.record_cpu(performance_data["cpu_usage_percent"])
 
-            metrics.record_ram(
-                performance_data["ram_usage_percent"]
-            )
+            metrics.record_ram(performance_data["ram_usage_percent"])
 
-            metrics.record_gpu(
-                performance_data["gpu_usage_percent"]
-            )
+            metrics.record_gpu(performance_data["gpu_usage_percent"])
 
-            metrics.record_gpu_memory(
-                performance_data["gpu_memory_used_mb"]
-            )
+            metrics.record_gpu_memory(performance_data["gpu_memory_used_mb"])
 
-            metrics.record_gpu_temperature(
-                performance_data["gpu_temperature_c"]
-            )
+            metrics.record_gpu_temperature(performance_data["gpu_temperature_c"])
 
             logger.info("Quiz metrics: %s", metrics.report())
 
-        logger.info(
-            "Quiz generation completed in %.2fs",
-            time.time() - start_time
-        )
+        logger.info("Quiz generation completed in %.2fs", time.time() - start_time)
 
         for q in result:
             q["topic"] = topic
@@ -424,6 +424,57 @@ class QuizService:
             q["question_id"] = generate_question_id(q.get("question", ""))
 
         return result
+
+    def submit_session_answer(
+        self, session_id: str, question_id: str, answer: str, user_context: UserContext
+    ) -> Dict[str, Any]:
+        session = self.quiz_session_service.get_session(session_id)
+        if not session or session.status != SessionStatus.ACTIVE:
+            raise ValueError("Invalid or inactive session")
+        
+        # Ensure question belongs to session
+        if question_id not in session.question_ids:
+            raise ValueError("Question not part of session")
+            
+        result = self.record_answer(question_id, answer, user_context)
+        
+        # Update session position if needed (simplified)
+        session.current_question_index += 1
+        self.quiz_session_service.update_progress(session_id, session.current_question_index)
+        
+        return result
+
+    def get_knowledge_summary(self) -> Dict[str, Any]:
+        """
+        Aggregate topic data for the Knowledge Library UI.
+        """
+        topics = self.metadata_loader.get_all_topics()
+        summary = []
+        
+        # Ensure fact cache is loaded (might be lazy initialized in tests/prod)
+        if not self.quiz_generator.fact_cache.cache:
+            self.quiz_generator.fact_cache.load()
+            
+        # Get metadata file modification time for last_updated
+        last_updated = datetime.now().isoformat() # Default
+        if self.metadata_loader.metadata_file.exists():
+            last_updated = datetime.fromtimestamp(
+                self.metadata_loader.metadata_file.stat().st_mtime
+            ).isoformat()
+            
+        for topic in topics:
+            notes = self.metadata_loader.get_notes_by_topic(topic)
+            facts = self.quiz_generator.fact_cache.get_facts(topic)
+            
+            summary.append({
+                "name": topic,
+                "note_count": len(notes),
+                "fact_count": len(facts),
+                "last_updated": last_updated,
+                "status": "ready"
+            })
+            
+        return {"topics": summary, "total_topics": len(summary)}
 
     def record_answer(
         self,
@@ -440,41 +491,57 @@ class QuizService:
                 "success": False,
                 "question_id": question_id,
                 "correct": False,
-                "success_rate": 0.0
+                "success_rate": 0.0,
             }
-    
-        correct = (
-            answer.upper()
-            ==
-            question.get("correct", "").upper()
-        )
 
-        update_answer_result(
-            question["metadata"],
-            correct
-        )
+        correct = answer.upper() == question.get("correct", "").upper()
 
-        cache.update_question(
-            question_id,
-            question
-        )
+        update_answer_result(question["metadata"], correct)
+
+        cache.update_question(question_id, question)
 
         # Update mastery
         if user_context and user_context.user_id:
             concept = question.get("concept") or question.get("topic", "General")
             self.mastery_service.update_mastery(user_context, concept, correct)
+            repository = self.analytics_repository
+            if (
+                repository is None
+                and hasattr(self.analytics_service, "repository")
+                and isinstance(self.analytics_service.repository, AnalyticsRepository)
+            ):
+                repository = self.analytics_service.repository
+            if repository is not None:
+                # MANDATORY: Extract session_id from question metadata
+                session_id = question.get("metadata", {}).get("session_id")
+                if not session_id:
+                    logger.warning(f"Answer recorded without session_id for question {question_id}")
+                    # For now keep existing behavior, but log it
+                    session_id = user_context.user_id
+
+                repository.record_learning_event(
+                    user_id=user_context.user_id,
+                    session_id=session_id,
+                    event_type="answer",
+                    topic=question.get("topic", "General"),
+                    concept=concept,
+                    correct=correct,
+                    difficulty=question.get("difficulty"),
+                    response_time_ms=question.get("metadata", {}).get(
+                        "response_time_ms"
+                    ),
+                )
 
         return {
             "success": True,
             "question_id": question_id,
             "correct": correct,
-            "success_rate": question["metadata"]["success_rate"]
+            "success_rate": question["metadata"]["success_rate"],
         }
 
     # ============================================================
     # PRIVATE HELPERS
     # ============================================================
-
 
     def generate_fill_blank_questions(
         self,
@@ -494,20 +561,13 @@ class QuizService:
 
         ranked_notes = self._rank_notes_by_content(notes)
 
-        facts = self._extract_facts_from_notes(
-            ranked_notes,
-            topic
-        )
-
-
+        facts = self._extract_facts_from_notes(ranked_notes, topic)
 
         result = self.quiz_generator.generate_fill_blank(
-            topic=topic,
-            supporting_facts=facts
+            topic=topic, supporting_facts=facts
         )
 
         return result.get("questions", [])[:count]
-
 
     """
     FUNCTION CHECKPOINT:
@@ -535,7 +595,6 @@ class QuizService:
         - Modify note content
         - Generate knowledge
     """
-    
 
     def _get_notes_for_topic(self, topic: str, subtopic: str) -> List[Dict[str, Any]]:
         topic_aliases = {
@@ -546,8 +605,7 @@ class QuizService:
 
         if subtopic:
             notes = self.metadata_loader.get_notes_by_subtopic(
-                normalized_topic,
-                subtopic
+                normalized_topic, subtopic
             )
             if not notes:
                 logger.warning(f"No notes found for {subtopic}. Falling back.")
@@ -626,7 +684,6 @@ class QuizService:
 
         extracted = []
 
-
         # Notes debug disabled
         # print("\n===== NOTES DEBUG =====")
         # print(type(notes))
@@ -690,20 +747,20 @@ class QuizService:
         - Replace source facts
         - Bypass validation
     """
-    
+
     def _generate_from_facts(
         self,
         facts: List[Dict[str, Any]],
         topic: str,
         target_count: int,
         question_type: str = "multiple",
-        metrics_context: Optional[MetricsContext] = None
+        metrics_context: Optional[MetricsContext] = None,
     ) -> List[Dict[str, Any]]:
 
         questions = []
 
         # ---------- Multiple Choice ----------
-        for fact_data in facts[:settings.MAX_FACTS_PER_NOTE]:
+        for fact_data in facts[: settings.MAX_FACTS_PER_NOTE]:
 
             if len(questions) >= target_count:
                 break
@@ -729,7 +786,7 @@ class QuizService:
                 fact_data=fact_data,
                 supporting_facts=facts,
                 question_type=question_type,
-                metrics_context=metrics_context
+                metrics_context=metrics_context,
             )
 
             llm_duration = time.perf_counter() - llm_start
@@ -744,7 +801,9 @@ class QuizService:
                     metrics_context.quiz_metrics.facts_used += 1
             else:
                 if metrics_context and metrics_context.quiz_metrics:
-                    metrics_context.quiz_metrics.add_failure("generation_failed_retry_exhaustion")
+                    metrics_context.quiz_metrics.add_failure(
+                        "generation_failed_retry_exhaustion"
+                    )
 
         # ---------- Fill Blank ----------
         fill_blank = self.quiz_generator.generate_fill_blank(

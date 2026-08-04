@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import './Sidebar.css';
 
 const topicIcons = {
@@ -28,6 +29,15 @@ const Sidebar = ({
   return (
     <aside className="sb-sidebar">
       <div className="sb-sidebar-header">
+        <span className="sb-sidebar-title">Menu</span>
+      </div>
+      <nav className="sb-sidebar-nav">
+        <Link to="/" className="sb-sidebar-item">Quiz</Link>
+        <Link to="/knowledge" className="sb-sidebar-item">Knowledge</Link>
+        <Link to="/analytics" className="sb-sidebar-item">Analytics</Link>
+      </nav>
+
+      <div className="sb-sidebar-header">
         <span className="sb-sidebar-title">Topics</span>
         <span className="sb-sidebar-count">{topics.length}</span>
       </div>
@@ -42,15 +52,15 @@ const Sidebar = ({
         ) : (
           topics.map((topic) => (
             <button
-              key={topic}
-              className={`sb-sidebar-item ${selectedTopic === topic ? 'sb-sidebar-item--active' : ''}`}
-              onClick={() => onSelectTopic(topic)}
+              key={topic.id}
+              className={`sb-sidebar-item ${selectedTopic === topic.name ? 'sb-sidebar-item--active' : ''}`}
+              onClick={() => onSelectTopic(topic.name)}
             >
               <span className="sb-sidebar-item-icon">
-                {topicIcons[topic] || '📄'}
+                {topicIcons[topic.name] || '📄'}
               </span>
-              <span className="sb-sidebar-item-label">{topic}</span>
-              {selectedTopic === topic && (
+              <span className="sb-sidebar-item-label">{topic.name}</span>
+              {selectedTopic === topic.name && (
                 <span className="sb-sidebar-item-emoji">✦</span>
               )}
             </button>

@@ -1,8 +1,8 @@
 import pytest
 import json
 from unittest.mock import MagicMock, patch
-from app.quiz.quiz_generator import QuizGenerator
-from app.quiz.question_cache import QuestionCache
+from app.quiz.generation.quiz_generator import QuizGenerator
+from app.quiz.storage.question_cache import QuestionCache
 
 @pytest.fixture
 def mock_dependencies():
@@ -34,11 +34,11 @@ def test_generated_question_has_source_traceability(mock_dependencies):
     gen.parser.extract_questions = MagicMock(return_value=[question])
     
     # Mock validators to pass
-    with patch("app.quiz.quiz_generator.validate_structure", return_value=True), \
-         patch("app.quiz.quiz_generator.validate_distractors", return_value=True), \
-         patch("app.quiz.quiz_generator.validate_semantic", return_value=True), \
-         patch("app.quiz.quiz_generator.validate_domain_correctness", return_value=True), \
-         patch("app.quiz.quiz_generator.is_relevant_to_topic", return_value=True):
+    with patch("app.quiz.validation.question_validator.validate_structure", return_value=True), \
+         patch("app.quiz.validation.question_validator.validate_distractors", return_value=True), \
+         patch("app.quiz.validation.question_semantic.validate_semantic", return_value=True), \
+         patch("app.quiz.validation.domain_validator.validate_domain_correctness", return_value=True), \
+         patch("app.quiz.validation.question_validator.is_relevant_to_topic", return_value=True):
 
         fact = {"concept": "Cloud Computing", "definition": "Fact about cloud", "topic": "Cloud", "source": "test.md", "fact_id": "f123"}
         
@@ -94,7 +94,7 @@ def test_question_cache_preserves_traceability(mock_dependencies):
     # from the LLM, but for cache test, we just want to ensure it roundtrips.
     # We will assume valid dict structure.
     # Save to cache
-    with patch("app.quiz.question_cache.is_valid_question", return_value=True):
+    with patch("app.quiz.storage.question_cache.is_valid_question", return_value=True):
         gen.cache.add_to_pool("Topic1", "", "medium", "multiple_choice", [question])
 
         # Load from cache

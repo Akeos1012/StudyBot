@@ -1,5 +1,5 @@
 import pytest
-from app.learning.recommendation_engine import RecommendationEngine
+from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 @pytest.fixture
 def engine():

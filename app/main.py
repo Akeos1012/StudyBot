@@ -9,28 +9,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .rag.metadata_loader import MetadataLoader
-from .quiz.quiz_generator import QuizGenerator
-from .quiz.pool_manager import PoolManager
+from .quiz.generation.quiz_generator import QuizGenerator
+from .quiz.storage.pool_manager import PoolManager
 from .monitoring.pool_metrics import PoolMetrics
 from .rag.retriever import Retriever
 from .services.quiz_service import QuizService
 from .services.quiz_session_service import QuizSessionService
-from .quiz.session_storage import QuizSessionStorage
+from .quiz.storage.session_storage import QuizSessionStorage
 from .services.smart_reviewer_service import SmartReviewerService
-from .api.routes import setup_routes
-from .learning.mastery_service import MasteryService
-from .learning.mastery_storage import MasteryStorage
-from .learning.history_service import HistoryService
-from .learning.history_storage import HistoryStorage
-from .learning.analytics_service import LearningAnalyticsService
-from .learning.recommendation_engine import RecommendationEngine
+from .api.quiz_routes import setup_routes
+from .learning.recommendation.recommendation_engine import RecommendationEngine
 
 from .learning.analytics.db_manager import DBManager
+from .learning.analytics.analytics_service import LearningAnalyticsService as SQLiteAnalyticsService
 from .learning.analytics.analytics_repository import AnalyticsRepository
-from .learning.analytics.analytics_service import (
-    LearningAnalyticsService as NewAnalyticsService,
-)
-from .learning.recommendation_service import RecommendationService
+from .learning.recommendation.recommendation_service import RecommendationService
 from .api.analytics_routes import setup_analytics_routes
 
 # Tutor Imports
@@ -41,8 +34,10 @@ from .tutor.fallback_handler import FallbackHandler
 from .tutor.answer_builder import AnswerBuilder
 from .tutor.source_linker import SourceLinker
 from .services.tutor_service import TutorService
-from .quiz.llm_client import LLMClient
+from .quiz.generation.llm_client import LLMClient
 from .api.tutor_routes import setup_tutor_routes
+
+from app.config import settings
 
 # Create FastAPI app
 app = FastAPI(title="AI Study Companion")
@@ -51,12 +46,7 @@ app = FastAPI(title="AI Study Companion")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,18 +73,11 @@ pool_manager = PoolManager(
     pool_metrics=pool_metrics,
 )
 
-history_storage = HistoryStorage()
-history_service = HistoryService(storage=history_storage)
-mastery_storage = MasteryStorage()
-mastery_service = MasteryService(storage=mastery_storage)
-analytics_service = LearningAnalyticsService(
-    mastery_storage=mastery_storage, history_storage=history_storage
-)
-
-# New Analytics components
+# Analytics components
 db_manager = DBManager()
 analytics_repository = AnalyticsRepository(db_manager)
-new_analytics_service = NewAnalyticsService(analytics_repository)
+
+new_analytics_service = SQLiteAnalyticsService(analytics_repository)
 
 recommendation_engine = RecommendationEngine()
 recommendation_service = RecommendationService(
@@ -130,9 +113,6 @@ quiz_service = QuizService(
     metadata_loader=metadata_loader,
     quiz_generator=quiz_generator,
     pool_manager=pool_manager,
-    mastery_service=mastery_service,
-    history_service=history_service,
-    analytics_service=analytics_service,
     recommendation_engine=recommendation_engine,
     quiz_session_service=quiz_session_service,
     analytics_repository=analytics_repository,
@@ -164,4 +144,9 @@ app.include_router(analytics_router)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(
+        "app.main:app",
+        host=settings.API_HOST,
+        port=settings.API_PORT,
+        reload=settings.API_RELOAD,
+    )

@@ -1,5 +1,5 @@
-from app.quiz.quiz_generator import QuizGenerator
-from app.quiz.question_cache import QuestionCache
+from app.quiz.generation.quiz_generator import QuizGenerator
+from app.quiz.storage.question_cache import QuestionCache
 from app.rag.fact_cache import FactCache
 
 

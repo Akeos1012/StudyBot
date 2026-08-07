@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from app.quiz.pool_manager import PoolManager
+from app.quiz.storage.pool_manager import PoolManager
 from app.monitoring.pool_metrics import PoolMetrics
 
 @pytest.fixture

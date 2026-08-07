@@ -1,5 +1,5 @@
 from app.rag.fact_cache import FactCache
-from app.quiz.quiz_generator import QuizGenerator
+from app.quiz.generation.quiz_generator import QuizGenerator
 
 
 def test_quick_quiz_pipeline():

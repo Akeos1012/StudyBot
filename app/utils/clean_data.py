@@ -89,7 +89,11 @@ class DataCleaner:
             cleaner.fix_issues(report)
     """
 
-    def __init__(self, fact_cache=None, cache_file: str = "facts_cache.json"):
+from app.config import settings
+
+# ...
+
+    def __init__(self, fact_cache=None, cache_file: str = None):
         """
         Initialize the data cleaner.
 
@@ -97,6 +101,8 @@ class DataCleaner:
             fact_cache: Optional FactCache instance. If None, creates one.
             cache_file: Path to cache file if creating new cache.
         """
+        if cache_file is None:
+            cache_file = settings.FACTS_CACHE_FILE
         if fact_cache:
             self.cache = fact_cache
         else:

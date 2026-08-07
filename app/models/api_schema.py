@@ -8,6 +8,7 @@ class QuizRequest(BaseModel):
     count: int = Field(default=3, ge=1, le=50)
     fresh: bool = False
     adaptive: bool = False
+    exclude_ids: Optional[List[str]] = None
 
 class FillBlankRequest(BaseModel):
     topic: str = "Database"

@@ -1,7 +1,7 @@
 from app.models.retrieved_context import RetrievedContext
 from app.models.tutor_schema import TutorIntent
 from app.tutor.prompts import SYSTEM_PROMPT, INTENT_TEMPLATES
-from app.quiz.llm_client import LLMClient
+from app.quiz.generation.llm_client import LLMClient
 
 class AnswerBuilder:
     def __init__(self, llm_client: LLMClient):

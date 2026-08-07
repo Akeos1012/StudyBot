@@ -1,8 +1,8 @@
 import pytest
 from app.rag.fact_cache import FactCache
 from app.rag.retriever import Retriever
-from app.quiz.quiz_generator import QuizGenerator
-from app.quiz.question_validator import is_valid_question
+from app.quiz.generation.quiz_generator import QuizGenerator
+from app.quiz.validation.question_validator import is_valid_question
 
 def test_pipeline_health():
     # 1. FactCache Health
@@ -20,7 +20,7 @@ def test_pipeline_health():
     assert len(facts) > 0, f"Retriever failed to retrieve facts for topic: {topic}"
     
     # 3. Quiz Generation Health
-    from app.quiz.question_cache import QuestionCache
+    from app.quiz.storage.question_cache import QuestionCache
 
     question_cache = QuestionCache()
 

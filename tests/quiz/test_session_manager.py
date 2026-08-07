@@ -1,5 +1,5 @@
 import pytest
-from app.quiz.session_manager import session_manager
+from app.quiz.storage.session_manager import session_manager
 from app.models.quiz_session import SessionStatus
 
 def test_session_lifecycle():

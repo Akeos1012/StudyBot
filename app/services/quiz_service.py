@@ -62,22 +62,21 @@ import random
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from ..rag.grounding_processor import GroundingProcessor
-from ..learning.analytics.analytics_repository import AnalyticsRepository
-from ..rag.metadata_loader import MetadataLoader
-from ..rag.fact_extractor import FactExtractor
-from ..quiz.quiz_generator import QuizGenerator
+from app.rag.grounding_processor import GroundingProcessor
+from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.rag.metadata_loader import MetadataLoader
+from app.rag.fact_extractor import FactExtractor
+from app.quiz.generation.quiz_generator import QuizGenerator
 from app.services.quiz_session_service import QuizSessionService
-from ..quiz.pool_manager import PoolManager
-from ..monitoring.quiz_metrics import QuizMetrics
-from ..monitoring.metrics_context import MetricsContext
-from ..quiz.question_metadata import update_answer_result
+from app.quiz.storage.pool_manager import PoolManager
+from app.monitoring.quiz_metrics import QuizMetrics
+from app.monitoring.metrics_context import MetricsContext
+from app.quiz.metadata.question_metadata import update_answer_result
 from app.models.user_context import UserContext
 from app.models.quiz_session import QuizSession, SessionStatus
-from app.learning.mastery_service import MasteryService
-from app.learning.history_service import HistoryService
-from app.learning.analytics_service import LearningAnalyticsService
-from app.learning.recommendation_engine import RecommendationEngine
+from app.learning.analytics.analytics_service import LearningAnalyticsService
+from app.learning.recommendation.recommendation_engine import RecommendationEngine
+from app.learning.mastery.mastery_tracker import update_concept_performance, calculate_difficulty, create_concept_record
 from app.utils.question_id import generate_question_id
 
 # ...
@@ -142,19 +141,13 @@ class QuizService:
         metadata_loader,
         quiz_generator,
         pool_manager,
-        mastery_service,
-        history_service,
-        analytics_service,
         recommendation_engine,
         quiz_session_service,
-        analytics_repository=None,
+        analytics_repository,
     ):
         self.metadata_loader = metadata_loader
         self.quiz_generator = quiz_generator
         self.pool_manager = pool_manager
-        self.mastery_service = mastery_service
-        self.history_service = history_service
-        self.analytics_service = analytics_service
         self.recommendation_engine = recommendation_engine
         self.quiz_session_service = quiz_session_service
         self.analytics_repository = analytics_repository
@@ -167,6 +160,7 @@ class QuizService:
         count: int = 3,
         fresh: bool = False,
         adaptive: bool = False,
+        exclude_ids: Optional[List[str]] = None,
     ) -> QuizSession:
         questions = self.get_or_generate_questions(
             topic=topic,
@@ -175,17 +169,18 @@ class QuizService:
             fresh=fresh,
             adaptive=adaptive,
             user_context=UserContext(user_id=user_id),
+            exclude_ids=exclude_ids,
         )
-        
+
         question_ids = [q["question_id"] for q in questions]
         session = self.quiz_session_service.create_session(
             user_id=user_id, topic=topic, difficulty=difficulty, question_ids=question_ids
         )
-        
+
         # Inject session_id into questions
         for q in questions:
             q.setdefault("metadata", {})["session_id"] = session.session_id
-            
+
         return session
 
     def generate_questions_for_topic(
@@ -299,6 +294,7 @@ class QuizService:
         user_context: Optional[UserContext] = None,
         adaptive: bool = False,
         personalize: bool = False,
+        exclude_ids: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve questions from cache or generate new ones.
@@ -307,9 +303,14 @@ class QuizService:
 
         # Adaptive difficulty logic
         if adaptive and user_context and user_context.user_id:
-            recommended_difficulty = self.mastery_service.get_recommended_difficulty(
-                user_context, topic
-            )
+            records = self.analytics_repository.get_mastery_records(user_context.user_id)
+            if not records:
+                recommended_difficulty = None
+            else:
+                total_mastery = sum(r.get("mastery_score", 0.0) for r in records)
+                avg = total_mastery / len(records)
+                recommended_difficulty = calculate_difficulty(avg)
+
             if recommended_difficulty:
                 logger.info(
                     f"Adaptive difficulty active: overriding {difficulty} with {recommended_difficulty}"
@@ -355,6 +356,7 @@ class QuizService:
                 question_type,
                 count,
                 concept_weights=concept_weights,
+                exclude_ids=exclude_ids,
             )
             if cached_questions and len(cached_questions) >= count:
                 logger.info(
@@ -378,6 +380,10 @@ class QuizService:
         )
 
         real_questions = [q for q in new_questions if not q.get("_is_fallback", False)]
+        
+        # Filter out questions already in exclude_ids if we still need to filter after generation
+        if exclude_ids:
+            real_questions = [q for q in real_questions if q.get("question_id") not in exclude_ids]
 
         if real_questions:
 
@@ -503,15 +509,35 @@ class QuizService:
         # Update mastery
         if user_context and user_context.user_id:
             concept = question.get("concept") or question.get("topic", "General")
-            self.mastery_service.update_mastery(user_context, concept, correct)
-            repository = self.analytics_repository
-            if (
-                repository is None
-                and hasattr(self.analytics_service, "repository")
-                and isinstance(self.analytics_service.repository, AnalyticsRepository)
-            ):
-                repository = self.analytics_service.repository
-            if repository is not None:
+            
+            # Retrieve and update mastery using analytics_repository
+            records = self.analytics_repository.get_mastery_records(user_context.user_id)
+            concept_record = next((r for r in records if r["concept"] == concept), None)
+            
+            if not concept_record:
+                concept_record_tracker = create_concept_record(concept)
+            else:
+                concept_record_tracker = {
+                    "concept": concept_record["concept"],
+                    "attempts": concept_record["attempts"],
+                    "correct": concept_record["correct_count"],
+                    "wrong": concept_record["wrong_count"],
+                    "mastery": concept_record["mastery_score"]
+                }
+            
+            updated_record = update_concept_performance(concept_record_tracker, correct)
+            
+            self.analytics_repository.upsert_mastery_record(
+                user_id=user_context.user_id,
+                concept=concept,
+                attempts=updated_record["attempts"],
+                correct_count=updated_record["correct"],
+                wrong_count=updated_record["wrong"],
+                mastery_score=updated_record["mastery"],
+                recommended_difficulty=updated_record["recommended_difficulty"]
+            )
+            
+            if self.analytics_repository is not None:
                 # MANDATORY: Extract session_id from question metadata
                 session_id = question.get("metadata", {}).get("session_id")
                 if not session_id:
@@ -519,7 +545,7 @@ class QuizService:
                     # For now keep existing behavior, but log it
                     session_id = user_context.user_id
 
-                repository.record_learning_event(
+                self.analytics_repository.record_learning_event(
                     user_id=user_context.user_id,
                     session_id=session_id,
                     event_type="answer",

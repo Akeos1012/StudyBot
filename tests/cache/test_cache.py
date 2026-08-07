@@ -1,6 +1,6 @@
 import pytest
 
-from app.quiz.question_cache import QuestionCache
+from app.quiz.storage.question_cache import QuestionCache
 
 
 @pytest.fixture

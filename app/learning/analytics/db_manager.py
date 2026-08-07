@@ -1,8 +1,10 @@
 import sqlite3
 import os
 
+from app.config import settings
+
 class DBManager:
-    def __init__(self, db_path: str = "analytics.db"):
+    def __init__(self, db_path: str = settings.DEFAULT_DB_PATH):
         self.db_path = db_path
         self._initialize_db()
 

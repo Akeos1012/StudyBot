@@ -3,7 +3,7 @@ import pytest
 import time
 from fastapi.testclient import TestClient
 from app.main import app
-from app.quiz.pool_manager import PoolManager
+from app.quiz.storage.pool_manager import PoolManager
 
 client = TestClient(app)
 

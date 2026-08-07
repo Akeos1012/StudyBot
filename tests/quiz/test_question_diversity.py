@@ -1,5 +1,5 @@
 import pytest
-from app.quiz.question_diversity import calculate_diversity_score
+from app.quiz.metadata.question_diversity import calculate_diversity_score
 
 def test_diversity_score():
     # Test identical concepts get low score

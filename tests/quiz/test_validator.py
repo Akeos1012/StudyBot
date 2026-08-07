@@ -1,5 +1,5 @@
-from app.quiz.question_validator import is_valid_question, has_grounded_explanation
-from app.quiz.question_grounding import explanation_supported_by_fact
+from app.quiz.validation.question_validator import is_valid_question, has_grounded_explanation
+from app.quiz.validation.question_grounding import explanation_supported_by_fact
 
 def test_is_valid_question():
     question = {

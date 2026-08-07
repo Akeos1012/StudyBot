@@ -23,3 +23,11 @@ facts_cache.json
 # OS
 Thumbs.db
 .DS_Store
+# Generated documentation
+/docs/app/
+*.html
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3

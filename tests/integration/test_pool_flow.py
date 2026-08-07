@@ -1,9 +1,11 @@
 import pytest
 from unittest.mock import MagicMock
 from app.services.quiz_service import QuizService
-from app.quiz.pool_manager import PoolManager
-from app.quiz.question_cache import QuestionCache
-from app.learning.mastery_service import MasteryService
+from app.quiz.storage.pool_manager import PoolManager
+from app.quiz.storage.question_cache import QuestionCache
+
+from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 @pytest.fixture
 def integration_setup(tmp_path):
@@ -11,11 +13,6 @@ def integration_setup(tmp_path):
     question_cache = QuestionCache(cache_file=str(tmp_path / "test_cache.json"))
     generator = MagicMock()
     generator.cache = question_cache # Important: link real cache
-    retriever = MagicMock()
-    mastery_service = MagicMock(spec=MasteryService)
-    history_service = MagicMock()
-    analytics_service = MagicMock()
-    recommendation_engine = MagicMock()
     
     # PoolManager is mocked to allow assertion on methods
     pool_manager = MagicMock()
@@ -25,17 +22,15 @@ def integration_setup(tmp_path):
         metadata_loader=MagicMock(),
         quiz_generator=generator,
         pool_manager=pool_manager,
-        mastery_service=mastery_service,
-        history_service=history_service,
-        analytics_service=analytics_service,
-        recommendation_engine=recommendation_engine,
-        quiz_session_service=MagicMock()
+        recommendation_engine=MagicMock(spec=RecommendationEngine),
+        quiz_session_service=MagicMock(),
+        analytics_repository=MagicMock(spec=AnalyticsRepository)
     )
     
-    return service, pool_manager, question_cache, generator, retriever, history_service
+    return service, pool_manager, question_cache, generator
 
 def test_healthy_pool_flow(integration_setup):
-    service, pool_manager, cache, generator, retriever, history_service = integration_setup
+    service, pool_manager, cache, generator = integration_setup
     pool_manager.should_expand_pool = MagicMock(return_value={"expand": False})
     
     # Inject cache.sample mock to verify call
@@ -49,7 +44,7 @@ def test_healthy_pool_flow(integration_setup):
     assert cache.sample.called
 
 def test_empty_pool_expansion_flow(integration_setup):
-    service, pool_manager, cache, generator, retriever, history_service = integration_setup
+    service, pool_manager, cache, generator = integration_setup
     
     # Trigger expansion
     pool_manager.should_expand_pool = MagicMock(return_value={"expand": True})
@@ -68,7 +63,7 @@ def test_empty_pool_expansion_flow(integration_setup):
     assert len(result) == 1
 
 def test_expansion_failure_fallback(integration_setup):
-    service, pool_manager, cache, generator, retriever, history_service = integration_setup
+    service, pool_manager, cache, generator = integration_setup
     
     # Force expand_pool to fail
     pool_manager.should_expand_pool = MagicMock(return_value={"expand": True})
@@ -101,12 +96,11 @@ def test_expansion_failure_fallback(integration_setup):
         assert result[0]["question"] == "fallback"
 
 def test_metadata_imbalance_trigger(integration_setup):
-    service, pool_manager, cache, generator, retriever, history_service = integration_setup
+    service, pool_manager, cache, generator = integration_setup
     
     # Mock imbalance
     pool_manager.should_expand_pool = MagicMock(return_value={"expand": True, "reasons": ["imbalance"]})
     generator.generate_questions.return_value = {"questions": [{"question": "q_imbalance"}]}
-    retriever.retrieve.return_value = ["fact"]
     
     # Execution
     service.get_or_generate_questions("Cloud", count=1)

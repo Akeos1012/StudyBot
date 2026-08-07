@@ -2,12 +2,14 @@ import pytest
 from unittest.mock import MagicMock
 
 from app.services.quiz_service import QuizService
-from app.quiz.quiz_generator import QuizGenerator
-from app.quiz.question_cache import QuestionCache
+from app.quiz.generation.quiz_generator import QuizGenerator
+from app.quiz.storage.question_cache import QuestionCache
 from app.rag.fact_cache import FactCache
-from app.quiz.llm_client import LLMClient
+from app.quiz.generation.llm_client import LLMClient
 from app.rag.metadata_loader import MetadataLoader
-from app.learning.history_service import HistoryService
+from app.learning.recommendation.recommendation_engine import RecommendationEngine
+from app.services.quiz_session_service import QuizSessionService
+from app.learning.analytics.analytics_repository import AnalyticsRepository
 
 
 @pytest.fixture
@@ -103,10 +105,9 @@ def metadata_loader(tmp_path):
         str(notes_dir)
     )
 
-from app.quiz.pool_manager import PoolManager
+from app.quiz.storage.pool_manager import PoolManager
 from app.monitoring.pool_metrics import PoolMetrics
 from app.rag.retriever import Retriever
-from app.learning.mastery_service import MasteryService
 
 @pytest.fixture
 def quiz_service(
@@ -133,10 +134,9 @@ def quiz_service(
         metadata_loader=metadata_loader,
         quiz_generator=generator,
         pool_manager=pool_manager,
-        mastery_service=MagicMock(spec=MasteryService),
-        history_service=MagicMock(spec=HistoryService),
-        analytics_service=MagicMock(),
-        recommendation_engine=MagicMock()
+        recommendation_engine=MagicMock(spec=RecommendationEngine),
+        quiz_session_service=MagicMock(spec=QuizSessionService),
+        analytics_repository=MagicMock(spec=AnalyticsRepository)
     )
 
 def test_full_pipeline_orchestration(quiz_service):

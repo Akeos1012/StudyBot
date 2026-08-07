@@ -1,7 +1,7 @@
 import pytest
 from app.rag.fact_cache import FactCache
-from app.quiz.question_cache import QuestionCache
-from app.quiz.question_validator import is_valid_question
+from app.quiz.storage.question_cache import QuestionCache
+from app.quiz.validation.question_validator import is_valid_question
 
 def test_cache_integrity():
     # 1. FactCache Health

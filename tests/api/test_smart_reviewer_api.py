@@ -1,8 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
-from app.main import app
-from app.api.routes import setup_routes
+# from app.main import app
+# Commented out as app/main.py import is causing circular/path issues in test environment.
+# Since we create a test FastAPI app inside client fixture, app/main is not needed.
+from app.api.quiz_routes import setup_routes
 
 @pytest.fixture
 def client(monkeypatch):

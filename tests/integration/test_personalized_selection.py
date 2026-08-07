@@ -1,27 +1,22 @@
 import pytest
 from unittest.mock import MagicMock
 from app.services.quiz_service import QuizService
-from app.learning.mastery_service import MasteryService
-from app.learning.history_service import HistoryService
-from app.learning.analytics_service import LearningAnalyticsService
-from app.learning.recommendation_engine import RecommendationEngine
-from app.quiz.question_cache import QuestionCache
-
-@pytest.fixture
-def mock_cache():
-    return MagicMock(spec=QuestionCache)
+from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.analytics.analytics_service import LearningAnalyticsService as NewLearningAnalyticsService
+from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 @pytest.fixture
 def service(mock_cache):
+    mock_new_service = MagicMock(spec=NewLearningAnalyticsService)
+    mock_repository = MagicMock(spec=AnalyticsRepository)
+
     return QuizService(
         metadata_loader=MagicMock(),
         quiz_generator=MagicMock(cache=mock_cache),
         pool_manager=MagicMock(),
-        mastery_service=MagicMock(spec=MasteryService),
-        history_service=MagicMock(spec=HistoryService),
-        analytics_service=MagicMock(spec=LearningAnalyticsService),
         recommendation_engine=MagicMock(spec=RecommendationEngine),
-        quiz_session_service=MagicMock()
+        quiz_session_service=MagicMock(),
+        analytics_repository=mock_repository,
     )
 def test_personalization_disabled(service, mock_cache):
     # Call with personalize=False
@@ -33,6 +28,7 @@ def test_personalization_disabled(service, mock_cache):
 
 def test_weak_concept_weighting(service, mock_cache):
     # Setup analytics to return a weak concept
+    service.analytics_service = MagicMock(spec=NewLearningAnalyticsService)
     service.analytics_service.get_learning_summary.return_value = {
         "weak_concepts": ["recursion"],
         "strong_concepts": []
@@ -50,6 +46,7 @@ def test_weak_concept_weighting(service, mock_cache):
 
 def test_no_user_history(service, mock_cache):
     # Setup analytics to return empty
+    service.analytics_service = MagicMock(spec=NewLearningAnalyticsService)
     service.analytics_service.get_learning_summary.return_value = {
         "weak_concepts": [],
         "strong_concepts": []

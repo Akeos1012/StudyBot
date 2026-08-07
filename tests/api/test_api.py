@@ -26,7 +26,7 @@ def test_topics():
     print_header("Testing Topics")
 
     response = requests.get(
-        f"{BASE_URL}/topics"
+        f"{BASE_URL}/knowledge/topics"
     )
 
     data = response.json()
@@ -34,7 +34,7 @@ def test_topics():
     print(response.status_code)
     print("Topics:")
     for topic in data.get("topics", []):
-        print(f" - {topic}")
+        print(f" - {topic.get('name')}")
 
 
 def test_generate_quiz():
@@ -47,14 +47,14 @@ def test_generate_quiz():
     }
 
     response = requests.post(
-        f"{BASE_URL}/quiz/generate",
+        f"{BASE_URL}/quiz/session/create",
         json=payload
     )
 
     data = response.json()
 
     assert response.status_code == 200
-    assert data["success"] is True
+    assert "session_id" in data
     assert len(data["questions"]) == 3
 
     for q in data["questions"]:
@@ -148,7 +148,7 @@ def test_invalid_topic():
     }
 
     response = requests.post(
-        f"{BASE_URL}/quiz/generate",
+        f"{BASE_URL}/quiz/session/create",
         json=payload
     )
 
@@ -168,7 +168,7 @@ def test_count_limit():
     }
 
     response = requests.post(
-        f"{BASE_URL}/quiz/generate",
+        f"{BASE_URL}/quiz/session/create",
         json=payload
     )
 
@@ -182,7 +182,7 @@ def test_missing_payload():
     print("=" * 60)
 
     response = requests.post(
-        f"{BASE_URL}/quiz/generate",
+        f"{BASE_URL}/quiz/session/create",
         json={}
     )
 
@@ -196,7 +196,7 @@ def test_wrong_method():
     print("=" * 60)
 
     response = requests.get(
-        f"{BASE_URL}/quiz/generate"
+        f"{BASE_URL}/quiz/session/create"
     )
 
     print("Status:", response.status_code)

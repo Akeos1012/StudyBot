@@ -1,10 +1,10 @@
 import pytest
 import json
 from unittest.mock import MagicMock, patch
-from app.quiz.quiz_generator import QuizGenerator
+from app.quiz.generation.quiz_generator import QuizGenerator
 from app.monitoring.metrics_context import MetricsContext
 from app.monitoring.quiz_metrics import QuizMetrics
-from app.quiz.question_validator import is_valid_question
+from app.quiz.validation.question_validator import is_valid_question
 
 # ... (keep existing imports and fixture)
 
@@ -40,12 +40,12 @@ def test_instrumentation_validation_failures(mock_dependencies):
     context = MetricsContext(quiz_metrics=metrics, topic="Cloud")
     
     # Patch validate_semantic to fail
-    with patch("app.quiz.quiz_generator.validate_semantic", return_value=False):
+    with patch("app.quiz.generation.quiz_generator.validate_semantic", return_value=False):
         # We need to mock other validators to ensure they pass
-        with patch("app.quiz.quiz_generator.validate_structure", return_value=True), \
-             patch("app.quiz.quiz_generator.validate_distractors", return_value=True), \
-             patch("app.quiz.quiz_generator.validate_domain_correctness", return_value=True), \
-             patch("app.quiz.quiz_generator.is_relevant_to_topic", return_value=True):
+        with patch("app.quiz.generation.quiz_generator.validate_structure", return_value=True), \
+             patch("app.quiz.generation.quiz_generator.validate_distractors", return_value=True), \
+             patch("app.quiz.generation.quiz_generator.validate_domain_correctness", return_value=True), \
+             patch("app.quiz.generation.quiz_generator.is_relevant_to_topic", return_value=True):
             
             gen.generate_questions(
                 topic="Cloud",

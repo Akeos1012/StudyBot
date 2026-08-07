@@ -17,9 +17,14 @@ function App() {
   const { topics, summary } = useKnowledgeTopics();
   const [selectedTopic, setSelectedTopic] = useState('');
   const [questions, setQuestions] = useState([]);
+  const [previousQuestionIds, setPreviousQuestionIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [answers, setAnswers] = useState({});
   const [showResults, setShowResults] = useState(false);
+
+  useEffect(() => {
+    setPreviousQuestionIds([]);
+  }, [selectedTopic]);
 
   const generateQuiz = async () => {
     if (!selectedTopic) return;
@@ -30,9 +35,11 @@ function App() {
     setShowResults(false);
 
     try {
-      const data = await quizApi.createSession(selectedTopic, "medium", 3, "default-user");
+      const data = await quizApi.createSession(selectedTopic, "medium", 3, "default-user", previousQuestionIds);
       if (data.questions && data.questions.length > 0) {
         setQuestions(data.questions);
+        const newIds = data.questions.map(q => q.question_id);
+        setPreviousQuestionIds(prev => [...new Set([...prev, ...newIds])]);
       }
     } catch (error) {
       console.error('Error generating quiz:', error);
@@ -40,27 +47,14 @@ function App() {
     setLoading(false);
   };
 
-  const extractLetter = (optionText) => {
-    if (!optionText) return '';
-    const match = optionText.match(/^([A-D])\s*[\)\.\-\s]/);
-    if (match) {
-      return match[1];
-    }
-    const firstChar = optionText.charAt(0);
-    if (['A', 'B', 'C', 'D'].includes(firstChar)) {
-      return firstChar;
-    }
-    return '';
-  };
 
   const selectAnswer = (questionIndex, optionText) => {
     if (showResults) return;
 
-    const letter = extractLetter(optionText);
-    if (letter) {
+    if (optionText) {
       setAnswers(prev => ({
         ...prev,
-        [questionIndex]: letter
+        [questionIndex]: optionText
       }));
     }
   };
@@ -82,8 +76,8 @@ function App() {
     let correct = 0;
     questions.forEach((q, index) => {
       const userAnswer = String(answers[index] || '').trim().toUpperCase();
-      const correctAnswer = String(q.correct || '').trim().toUpperCase();
-      if (userAnswer === correctAnswer) {
+      const correctAnswer = String(q.correct_text || q.correct || '').trim().toUpperCase();
+      if (userAnswer && userAnswer === correctAnswer) {
         correct++;
       }
     });
@@ -131,7 +125,6 @@ function App() {
                 onResetQuiz={resetQuiz}
                 calculateScore={calculateScore}
                 isFillBlankCorrect={isFillBlankCorrect}
-                extractLetter={extractLetter}
               />
             } />
             <Route path="/analytics" element={<AnalyticsDashboard />} />

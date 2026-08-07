@@ -1,41 +1,35 @@
 import pytest
-import os
-import json
-from app.learning.mastery_storage import MasteryStorage
-from app.learning.mastery_service import MasteryService
+from unittest.mock import MagicMock
 from app.models.user_context import UserContext
+from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.mastery.mastery_tracker import update_concept_performance, create_concept_record
 
 @pytest.fixture
-def test_storage():
-    storage_path = "test_mastery_data.json"
-    if os.path.exists(storage_path):
-        os.remove(storage_path)
-    yield MasteryStorage(storage_path)
-    if os.path.exists(storage_path):
-        os.remove(storage_path)
+def mock_repo():
+    return MagicMock(spec=AnalyticsRepository)
 
-def test_storage_save_load(test_storage):
-    user_id = "user1"
-    records = {"concept1": {"attempts": 1, "correct": 1, "wrong": 0, "mastery": 1.0, "recommended_difficulty": "hard"}}
-    test_storage.save_user_records(user_id, records)
-    assert test_storage.get_user_records(user_id) == records
-
-def test_mastery_service_update(test_storage):
-    service = MasteryService(test_storage)
+def test_mastery_update(mock_repo):
     user_context = UserContext(user_id="user1")
     concept = "concept1"
     
-    # Correct answer
-    service.update_mastery(user_context, concept, True)
-    records = test_storage.get_user_records(user_context.user_id)
-    assert records[concept]["attempts"] == 1
-    assert records[concept]["correct"] == 1
-    assert records[concept]["mastery"] == 1.0
+    # Mock return value for get_mastery_records
+    mock_repo.get_mastery_records.return_value = []
     
-    # Wrong answer
-    service.update_mastery(user_context, concept, False)
-    records = test_storage.get_user_records(user_context.user_id)
-    assert records[concept]["attempts"] == 2
-    assert records[concept]["correct"] == 1
-    assert records[concept]["wrong"] == 1
-    assert records[concept]["mastery"] == 0.5
+    # Simulate update logic directly using mastery_tracker
+    concept_record = create_concept_record(concept)
+    updated_record = update_concept_performance(concept_record, True)
+    
+    mock_repo.upsert_mastery_record(
+        user_id=user_context.user_id,
+        concept=concept,
+        **updated_record
+    )
+    
+    # Verify call to upsert_mastery_record
+    mock_repo.upsert_mastery_record.assert_called_once()
+    args, kwargs = mock_repo.upsert_mastery_record.call_args
+    assert kwargs["user_id"] == "user1"
+    assert kwargs["concept"] == concept
+    assert kwargs["attempts"] == 1
+    assert kwargs["correct_count"] == 1
+

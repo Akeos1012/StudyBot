@@ -1,0 +1,76 @@
+{
+  "users": {
+    "test_user": {
+      "Normalization": {
+        "concept": "Normalization",
+        "attempts": 2,
+        "correct": 2,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      }
+    },
+    "production_user": {
+      "Normalization": {
+        "concept": "Normalization",
+        "attempts": 1,
+        "correct": 1,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      }
+    },
+    "runtime-verification-mhzisr": {
+      "Conditional Branching": {
+        "concept": "Conditional Branching",
+        "attempts": 1,
+        "correct": 1,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      },
+      "Array": {
+        "concept": "Array",
+        "attempts": 1,
+        "correct": 1,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      },
+      "Error Handling": {
+        "concept": "Error Handling",
+        "attempts": 1,
+        "correct": 1,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      }
+    },
+    "runtime-verification-yrckio": {
+      "Conditional Branching": {
+        "concept": "Conditional Branching",
+        "attempts": 1,
+        "correct": 1,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      },
+      "Batch Processing": {
+        "concept": "Batch Processing",
+        "attempts": 1,
+        "correct": 1,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      },
+      "Conditional Statement": {
+        "concept": "Conditional Statement",
+        "attempts": 1,
+        "correct": 1,
+        "wrong": 0,
+        "mastery": 1.0,
+        "recommended_difficulty": "hard"
+      }
+    }
+  }
+}

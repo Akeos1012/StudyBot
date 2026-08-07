@@ -9,8 +9,10 @@ from app.models.api_schema import (
     RecommendationResponse
 )
 
+from app.config import settings
+
 def setup_analytics_routes(analytics_service, recommendation_service=None):
-    router = APIRouter(prefix="/analytics", tags=["analytics"])
+    router = APIRouter(prefix=settings.ANALYTICS_API_PREFIX, tags=["analytics"])
 
     @router.get("/mastery", response_model=MasteryResponse)
     async def get_mastery(user_id: Optional[str] = Header(None, alias="X-User-ID")):

@@ -35,92 +35,9 @@ from ..models.fact_schema import (
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# CONSTANTS
-# ============================================================================
+from app.config import settings
 
-# Minimum fact quality score
-MIN_FACT_SCORE = 5
-
-# Maximum length for supporting fact
-MAX_SUPPORTING_FACT_LENGTH = 220
-
-# Minimum words in a supporting fact
-MIN_SUPPORTING_FACT_WORDS = 4
-
-# Maximum words in a supporting fact
-MAX_SUPPORTING_FACT_WORDS = 24
-
-# Default fact weight
-DEFAULT_FACT_WEIGHT = 7
-
-# File extension for notes
-NOTE_EXTENSION = ".md"
-
-# Patterns to reject in fact text
-REJECTED_PATTERNS = [
-    r"^\s*#+\s*",  # Markdown headers
-    r"^\s*[-*+]\s*",  # Markdown bullets
-    r"^\s*\d+\.\s*",  # Numbered lists
-    r"\[\[(.*?)\]\]",  # Wiki links (preserve text)
-    r"^\s*(how|why|what|when|where)\s",  # Question words at start
-    r"\b(conclusion|summary|overview|references)\b",  # Section words
-]
-
-# Words that indicate weak concepts
-WEAK_INDICATORS = {
-    "example",
-    "examples",
-    "technique",
-    "techniques",
-    "approach",
-    "approaches",
-    "method",
-    "methods",
-    "process",
-    "processes",
-    "concept",
-    "concepts",
-    "system",
-    "systems",
-    "layer",
-    "layers",
-    "overview",
-    "summary",
-    "introduction",
-    "conclusion",
-    "types",
-    "categories",
-    "classification",
-}
-
-# ============================================================================
-# EXCEPTIONS
-# ============================================================================
-
-
-class GroundingError(Exception):
-    """Base exception for grounding errors."""
-
-    pass
-
-
-class FactValidationError(GroundingError):
-    """Raised when a fact fails validation."""
-
-    pass
-
-
-class NoValidFactsError(GroundingError):
-    """Raised when no valid facts are found."""
-
-    pass
-
-
-# ============================================================================
-# MAIN CLASS
-# ============================================================================
-
+# ...
 
 class GroundingProcessor:
     """
@@ -138,8 +55,8 @@ class GroundingProcessor:
 
     def __init__(
         self,
-        min_score: int = MIN_FACT_SCORE,
-        max_length: int = MAX_SUPPORTING_FACT_LENGTH,
+        min_score: int = None,
+        max_length: int = None,
     ):
         """
         Initialize the grounding processor.
@@ -148,8 +65,8 @@ class GroundingProcessor:
             min_score: Minimum quality score for a fact to be accepted
             max_length: Maximum length for supporting fact text
         """
-        self.min_score = min_score
-        self.max_length = max_length
+        self.min_score = min_score if min_score is not None else settings.MIN_FACT_SCORE
+        self.max_length = max_length if max_length is not None else settings.MAX_SUPPORTING_FACT_LENGTH
 
     # =========================================================================
     # PUBLIC API

@@ -2,7 +2,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
-from app.api.routes import setup_routes
+from app.api.quiz_routes import setup_routes
 
 @pytest.fixture
 def client():

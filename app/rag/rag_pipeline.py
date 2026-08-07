@@ -90,7 +90,11 @@ class RAGPipeline:
 
         return cleaned
 
-    def search(self, query: str, topic=None, limit=5) -> List[Dict[str, Any]]:
+from app.config import settings
+
+# ...
+
+    def search(self, query: str, topic=None, limit=settings.RAG_RETRIEVAL_LIMIT) -> List[Dict[str, Any]]:
         """
         Search knowledge base.
         """

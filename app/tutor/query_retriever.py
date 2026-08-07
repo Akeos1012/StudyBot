@@ -19,8 +19,12 @@ class QueryRetriever:
         if not context.found:
             return context
         
-        # Limit to 5 facts and sync other fields
-        limit = 5
+from app.config import settings
+
+# ...
+
+        # Limit to TUTOR_RETRIEVAL_LIMIT facts and sync other fields
+        limit = settings.TUTOR_RETRIEVAL_LIMIT
         
         # Slice lists to the limit
         context.facts = context.facts[:limit]

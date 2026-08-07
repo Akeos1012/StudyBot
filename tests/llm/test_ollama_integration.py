@@ -1,6 +1,6 @@
 import pytest
 
-from app.quiz.llm_client import LLMClient
+from app.quiz.generation.llm_client import LLMClient
 
 
 @pytest.mark.integration

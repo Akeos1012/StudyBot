@@ -2,11 +2,11 @@ const API_BASE = '/api'; // Assuming proxy setup or relative path
 const USER_ID_HEADER = 'X-User-ID';
 
 export const quizApi = {
-    async createSession(topic, difficulty, count, userId) {
+    async createSession(topic, difficulty, count, userId, excludeIds = []) {
         const response = await fetch(`${API_BASE}/quiz/session/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', [USER_ID_HEADER]: userId },
-            body: JSON.stringify({ topic, difficulty, question_count: count })
+            body: JSON.stringify({ topic, difficulty, count, exclude_ids: excludeIds })
         });
         if (!response.ok) throw new Error('Failed to create session');
         return response.json();

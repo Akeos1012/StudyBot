@@ -4,14 +4,15 @@ import os
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 from app.services.quiz_service import QuizService
-from app.quiz.pool_manager import PoolManager
-from app.quiz.question_cache import QuestionCache
-from app.quiz.quiz_generator import QuizGenerator
+from app.quiz.storage.pool_manager import PoolManager
+from app.quiz.storage.question_cache import QuestionCache
+from app.quiz.generation.quiz_generator import QuizGenerator
 from app.rag.retriever import Retriever
 from app.rag.fact_cache import FactCache
 from app.rag.metadata_loader import MetadataLoader
 from app.monitoring.pool_metrics import PoolMetrics
-from app.learning.mastery_service import MasteryService
+from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 # Mock deterministic LLM response that passes validators
 MOCK_LLM_RESPONSE = json.dumps({
@@ -36,7 +37,7 @@ def temp_cache(tmp_path):
 
 @pytest.fixture
 def mocked_llm():
-    with patch("app.quiz.llm_client.LLMClient.generate", return_value=MOCK_LLM_RESPONSE):
+    with patch("app.quiz.generation.llm_client.LLMClient.generate", return_value=MOCK_LLM_RESPONSE):
         yield
 
 @pytest.fixture
@@ -69,11 +70,9 @@ def pipeline_setup(temp_cache, mocked_llm):
         metadata_loader=MagicMock(spec=MetadataLoader),
         quiz_generator=generator,
         pool_manager=pool_manager,
-        mastery_service=MagicMock(spec=MasteryService),
-        history_service=MagicMock(),
-        analytics_service=MagicMock(),
-        recommendation_engine=MagicMock(),
-        quiz_session_service=MagicMock()
+        recommendation_engine=MagicMock(spec=RecommendationEngine),
+        quiz_session_service=MagicMock(),
+        analytics_repository=MagicMock(spec=AnalyticsRepository)
     )
     
     return service, pool_manager, temp_cache, generator
@@ -105,7 +104,6 @@ def test_empty_pool_real_expansion_flow(pipeline_setup):
             "source_note": "note1"
         }]}):
             questions = service.get_or_generate_questions(topic, count=5)
-            print("DEBUG: questions returned:", questions)
             
             # Verify
             assert len(questions) > 0

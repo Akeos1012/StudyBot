@@ -3,8 +3,8 @@ import sqlite3
 from app.learning.analytics.db_manager import DBManager
 from app.learning.analytics.analytics_repository import AnalyticsRepository
 from app.learning.analytics.analytics_service import LearningAnalyticsService
-from app.learning.recommendation_service import RecommendationService
-from app.learning.recommendation_engine import RecommendationEngine
+from app.learning.recommendation.recommendation_service import RecommendationService
+from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 @pytest.fixture
 def test_setup():

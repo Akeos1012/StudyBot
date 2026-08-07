@@ -95,3 +95,35 @@ class AnalyticsRepository:
         if self.db_manager.db_path != ":memory:":
             conn.close()
         return dict(row)
+
+    def upsert_mastery_record(
+        self,
+        user_id: str,
+        concept: str,
+        attempts: int,
+        correct_count: int,
+        wrong_count: int,
+        mastery_score: float,
+        recommended_difficulty: Optional[str] = None
+    ) -> None:
+        conn = self.db_manager.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO mastery_records (
+                user_id, concept, attempts, correct_count, wrong_count, 
+                mastery_score, recommended_difficulty, last_updated
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, concept) DO UPDATE SET
+                attempts = excluded.attempts,
+                correct_count = excluded.correct_count,
+                wrong_count = excluded.wrong_count,
+                mastery_score = excluded.mastery_score,
+                recommended_difficulty = excluded.recommended_difficulty,
+                last_updated = CURRENT_TIMESTAMP
+            """,
+            (user_id, concept, attempts, correct_count, wrong_count, mastery_score, recommended_difficulty),
+        )
+        conn.commit()
+        if self.db_manager.db_path != ":memory:":
+            conn.close()

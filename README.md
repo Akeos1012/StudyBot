@@ -189,19 +189,3 @@ Documentation may include:
 * Development notes
 * Alpha testing information
 
----
-
-## Development Status
-
-StudyBot is actively maintained and will continue to receive updates after the initial Alpha release.
-
-The Alpha release represents a testing milestone rather than the end of development.
-
-Future updates may include new features, improvements to existing functionality, bug fixes, performance improvements, and additional documentation.
-
-
-*
-
-### Documentation
-
-*

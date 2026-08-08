@@ -189,3 +189,140 @@ Documentation may include:
 * Development notes
 * Alpha testing information
 
+
+# StudyBot
+
+## Alpha Testing
+StudyBot is currently in Alpha Testing. It is actively maintained and will continue to receive features, improvements, fixes, and documentation updates. As an alpha project, it is functional but is not yet a fully stable release.
+
+## About StudyBot
+StudyBot is an AI-powered study companion designed to help students study using their own educational notes and materials. It generates study questions from available study materials. Generated content is intended to remain grounded in the provided source material.
+
+## Important Features
+- Quiz generation from study notes
+- Retrieval-Augmented Generation (RAG) for source grounding
+- Fact extraction and fact caching
+- Question validation
+- Question explanations
+- Tutor functionality
+- Quiz session management
+- Analytics and mastery tracking
+- Recommendation functionality
+- React/Vite frontend
+- FastAPI backend
+- Centralized configuration using environment variables
+
+## Supported Question Types
+- Multiple Choice Questions (MCQ)
+    - Exactly four answer options.
+    - Validated answer key (A, B, C, D).
+- Fill-in-the-blank
+    - Requires supporting information and a concept.
+    - Validated before acceptance.
+
+## Requirements
+- Python 3.11+
+- Python virtual environment
+- Ollama
+- A compatible Ollama model (default: qwen2.5:3b)
+- Node.js and npm (for React/Vite frontend)
+
+## Installation
+### Backend
+1. Create and activate a Python virtual environment.
+2. Install the necessary Python dependencies. Note: The project does not currently have a single requirements.txt file.
+
+### Ollama
+Ollama is required for the default LLM setup. Ensure Ollama is installed and running, and the default model (qwen2.5:3b) is available.
+
+### Frontend
+1. Navigate to the `frontend/` directory.
+2. Run `npm install` to install frontend dependencies.
+
+## Configuration
+StudyBot supports configuration via environment variables using the `STUDYBOT_` prefix. A `.env` file may be used in the root directory for local configuration.
+
+Verified variables:
+- `STUDYBOT_DEBUG`
+- `STUDYBOT_API_HOST`
+- `STUDYBOT_API_PORT`
+- `STUDYBOT_API_RELOAD`
+- `STUDYBOT_ALLOWED_ORIGINS`
+- `STUDYBOT_NOTES_DIRECTORY`
+- `STUDYBOT_LLM_MODEL`
+- `STUDYBOT_LLM_DEFAULT_TIMEOUT`
+- `STUDYBOT_LLM_TEMPERATURE`
+- `STUDYBOT_DB_PATH`
+
+Example `.env`:
+```
+STUDYBOT_DEBUG=true
+STUDYBOT_API_HOST=127.0.0.1
+STUDYBOT_API_PORT=8000
+STUDYBOT_API_RELOAD=true
+STUDYBOT_LLM_MODEL=qwen2.5:3b
+STUDYBOT_DB_PATH=analytics.db
+```
+
+## Running StudyBot
+StudyBot requires both the backend and frontend to be running.
+
+### Backend
+```bash
+python -m app.main
+```
+
+### Frontend
+```bash
+cd frontend
+npm run dev
+```
+
+## Testing
+Run the smoke test to verify the primary quiz pipeline:
+```bash
+python -m pytest tests/smoke/test_quick.py
+```
+
+## Alpha Testing Guidelines
+Testers are encouraged to focus on:
+- Generating different question types
+- Checking answer correctness
+- Verifying if questions are supported by source material
+- Checking explanations
+- Testing different study materials
+- Reporting crashes, unexpected behavior, and performance issues
+- Reporting misleading or incorrect questions
+- Providing reproducible steps when reporting issues
+
+## Known Limitations
+- The project is under active development; features and behavior may change.
+- Generated questions can occasionally require additional review.
+- Quality depends on the quality and structure of source materials.
+- LLM performance depends on the configured model and available hardware.
+- Some functionality may still be experimental.
+- Documentation is ongoing.
+
+## Documentation
+Documentation will continue to expand during Alpha Testing.
+
+## Development Status
+Active development.
+
+## Update Log
+
+## [2026-08-08] - Alpha Update
+### Added
+- [Template]
+
+### Improved
+- [Template]
+
+### Fixed
+- [Template]
+
+### Changed
+- [Template]
+
+### Documentation
+- Initial README creation.

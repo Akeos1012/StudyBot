@@ -625,10 +625,17 @@ class QuizGenerator:
 
             # Ensure distractors and answer make 4
             options = distractors + [answer]
-            # Shuffle is fine here
+
+            # Shuffle options while keeping the correct-answer letter synchronized.
             random.shuffle(options)
-            
+
             question["options"] = options
+
+            # The validator expects "correct" to identify the actual
+            # position of the correct answer after shuffling.
+            correct_index = options.index(answer)
+            question["correct"] = chr(ord("A") + correct_index)
+            question["correct_text"] = answer
 
             # Propagate fact metadata onto question object
             question["topic"] = question.get("topic") or fact_data.get("topic") or topic

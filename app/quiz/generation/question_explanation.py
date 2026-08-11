@@ -8,9 +8,7 @@ import re
 from typing import List, Dict, Any
 from ..utils.text_normalizer import normalize_supporting_fact
 
-from app.config import settings
-
-# MAX_EXPLANATION_WORDS = 30
+from app.config.settings import MAX_EXPLANATION_WORDS
 
 
 def build_consistent_explanation(
@@ -193,7 +191,7 @@ def limit_explanation_length(text: str, max_words: int = None) -> str:
     Trim explanation without cutting sentences in half.
     """
     if max_words is None:
-        max_words = settings.MAX_EXPLANATION_WORDS
+        max_words = MAX_EXPLANATION_WORDS
     if not text:
         return ""
 

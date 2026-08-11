@@ -307,6 +307,12 @@ def validate_structure(question: dict, metrics_context: MetricsContext = None) -
     if not q_text.endswith("?"):
         _log_failure(question, "structure", "Question does not end with '?'", metrics_context)
         return False
+        
+    # NEW VALIDATION RULE: Reject definition-style questions
+    q_lower = q_text.lower()
+    if (q_lower.startswith("what is") or q_lower.startswith("what are")) and len(q_text.split()) < 12:
+        _log_failure(question, "quality", "Rejected definition-style question", metrics_context)
+        return False
 
     if len(q_text) > MAX_QUESTION_LENGTH:
         _log_failure(question, "structure", "Question exceeds maximum length", metrics_context)

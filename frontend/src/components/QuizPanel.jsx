@@ -14,8 +14,7 @@ const QuizPanel = ({
   onSubmitQuiz,
   onResetQuiz,
   calculateScore,
-  isFillBlankCorrect,
-  extractLetter
+  isFillBlankCorrect
 }) => {
   const isFillInBlank = (question) => {
     return (
@@ -85,7 +84,6 @@ const QuizPanel = ({
             onSelectAnswer={onSelectAnswer}
             onFillBlankAnswer={onFillBlankAnswer}
             isFillBlankCorrect={isFillBlankCorrect}
-            extractLetter={extractLetter}
           />
         ))}
       </div>

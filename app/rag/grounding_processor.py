@@ -205,7 +205,7 @@ class GroundingProcessor:
             logger.debug("Fact missing valid concept")
             return False
 
-        if not supporting or len(supporting.split()) < MIN_SUPPORTING_FACT_WORDS:
+        if not supporting or len(supporting.split()) < settings.MIN_SUPPORTING_FACT_WORDS:
             logger.debug("Fact missing supporting evidence")
             return False
 
@@ -238,17 +238,13 @@ class GroundingProcessor:
 
         concept_lower = concept.lower()
 
-        # Use fact_schema's is_weak_concept
+        # fact_schema.py is the authority for weak/invalid concepts.
         if is_weak_concept(concept_lower):
             return True
 
-        # Additional checks
-        if concept_lower in WEAK_INDICATORS:
-            return True
-
-        # Reject single-word generic concepts
-        words = concept.split()
-        if len(words) == 1 and len(concept) < 3:
+        # Reject extremely short single-word concepts.
+        words = concept_lower.split()
+        if len(words) == 1 and len(concept_lower) < 3:
             return True
 
         return False
@@ -348,12 +344,14 @@ class GroundingProcessor:
         cleaned = self._clean_text(evidence)
 
         # Check minimum word count
-        if len(cleaned.split()) < MIN_SUPPORTING_FACT_WORDS:
+        if len(cleaned.split()) < settings.MIN_SUPPORTING_FACT_WORDS:
             return None
 
         # Check maximum word count
-        if len(cleaned.split()) > MAX_SUPPORTING_FACT_WORDS:
-            cleaned = " ".join(cleaned.split()[:MAX_SUPPORTING_FACT_WORDS]).rstrip(" .")
+        if len(cleaned.split()) > settings.MAX_SUPPORTING_FACT_WORDS:
+            cleaned = " ".join(
+                cleaned.split()[:settings.MAX_SUPPORTING_FACT_WORDS]
+            ).rstrip(" .")
 
         return cleaned
 
@@ -371,10 +369,6 @@ class GroundingProcessor:
             return ""
 
         cleaned = str(text).strip()
-
-        # Remove markdown patterns
-        for pattern in REJECTED_PATTERNS:
-            cleaned = re.sub(pattern, "", cleaned)
 
         # Remove markdown formatting
         cleaned = re.sub(r"[*_`>#]", "", cleaned)
@@ -433,7 +427,6 @@ class GroundingProcessor:
         grounded["supporting_fact"] = evidence
         grounded["source_note"] = source_note
         grounded["fact_id"] = fact_id
-        grounded["weight"] = DEFAULT_FACT_WEIGHT
         grounded["concept"] = concept
 
         return grounded

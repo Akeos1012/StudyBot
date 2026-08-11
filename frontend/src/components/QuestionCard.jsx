@@ -1,5 +1,6 @@
 import React from 'react';
 import './QuestionCard.css';
+import { extractOptionLetter } from '../utils/quizUtils';
 
 const QuestionCard = ({
   question,
@@ -8,8 +9,7 @@ const QuestionCard = ({
   showResults,
   onSelectAnswer,
   onFillBlankAnswer,
-  isFillBlankCorrect,
-  extractLetter
+  isFillBlankCorrect
 }) => {
   const isFillInBlank = (q) => {
     return (
@@ -22,8 +22,11 @@ const QuestionCard = ({
 
   const isFillBlank = isFillInBlank(question);
   const userAnswer = answers[index];
-  const isCorrect = showResults && isFillBlank ? isFillBlankCorrect(index) : false;
   const correctAnswer = question.correct_text || question.correct;
+  
+  const isCorrect = showResults && (isFillBlank 
+    ? isFillBlankCorrect(index) 
+    : (userAnswer && extractOptionLetter(userAnswer) === extractOptionLetter(String(question.correct))));
   
   const renderFeedback = () => {
     if (!showResults) return null;

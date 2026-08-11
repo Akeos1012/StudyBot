@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
 import { api } from './services/api';
 import { quizApi } from './services/quiz_api';
+import { extractOptionLetter } from './utils/quizUtils';
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import QuizPanel from "./components/QuizPanel";
@@ -74,10 +75,13 @@ function App() {
 
   const calculateScore = () => {
     let correct = 0;
+    
     questions.forEach((q, index) => {
-      const userAnswer = String(answers[index] || '').trim().toUpperCase();
-      const correctAnswer = String(q.correct_text || q.correct || '').trim().toUpperCase();
-      if (userAnswer && userAnswer === correctAnswer) {
+      const userAnswerFull = answers[index] || '';
+      const userAnswerLetter = extractOptionLetter(userAnswerFull);
+      const correctAnswer = String(q.correct || '').trim().toUpperCase();
+      
+      if (userAnswerLetter && userAnswerLetter === correctAnswer) {
         correct++;
       }
     });

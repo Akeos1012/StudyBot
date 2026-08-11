@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from app.models.user_context import UserContext
 from app.models.smart_reviewer_schema import SmartReviewerResult
+from app.models.quiz_session import SessionStatus
 from app.models.api_schema import (
     QuizRequest,
     FillBlankRequest,
@@ -29,12 +30,48 @@ def setup_routes(quiz_service, quiz_session_service, metadata_loader, metadata, 
     async def get_knowledge_topics():
         return quiz_service.get_knowledge_summary()
 
-    @router.post("/quiz/session/create")
-    async def create_session(
+
+    @router.post("/quiz/generate")
+    async def generate_quiz(
         request: QuizRequest,
         user_id: str = Header("anonymous_user", alias="X-User-ID")
     ):
         user_context = UserContext(user_id=user_id)
+
+        questions = quiz_service.get_or_generate_questions(
+            topic=request.topic,
+            difficulty=request.difficulty,
+            count=request.count,
+            fresh=request.fresh,
+            adaptive=request.adaptive,
+            user_context=user_context,
+            exclude_ids=request.exclude_ids,
+        )
+
+        return {
+            "success": True,
+            "topic": request.topic,
+            "difficulty": request.difficulty,
+            "count": len(questions),
+            "questions": questions,
+            "source_notes": list(
+                set(
+                    q.get("source_note")
+                    for q in questions
+                    if q.get("source_note")
+                )
+            ),
+        }
+
+
+    @router.post("/quiz/session/create")
+    async def create_session(
+        request: QuizRequest,
+        background_tasks: BackgroundTasks,
+        user_id: str = Header("anonymous_user", alias="X-User-ID")
+    ):
+        user_context = UserContext(user_id=user_id)
+
         session = quiz_service.create_quiz_session(
             user_id=user_id,
             topic=request.topic,
@@ -44,6 +81,30 @@ def setup_routes(quiz_service, quiz_session_service, metadata_loader, metadata, 
             adaptive=request.adaptive,
             exclude_ids=request.exclude_ids
         )
+
+        # Check whether the topic needs pool expansion.
+        try:
+            health = quiz_service.pool_manager.should_expand_pool(request.topic)
+
+            if health.get("expand", False):
+                logger.info(
+                    "Scheduling background pool expansion for '%s': %s",
+                    request.topic,
+                    health.get("reasons"),
+                )
+
+                background_tasks.add_task(
+                    quiz_service.pool_manager.expand_pool,
+                    request.topic,
+                )
+
+        except Exception as e:
+            logger.error(
+                "Failed to schedule pool expansion for %s: %s",
+                request.topic,
+                e,
+            )
+
         full_questions = []
         for qid in session.question_ids:
             q = quiz_service.quiz_generator.cache.get_question_by_id(qid)

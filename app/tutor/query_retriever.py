@@ -2,6 +2,7 @@ from app.models.tutor_schema import NormalizedQuery
 from app.models.retrieved_context import RetrievedContext
 from app.rag.retriever import Retriever
 import logging
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,6 @@ class QueryRetriever:
         if not context.found:
             return context
         
-from app.config import settings
-
-# ...
-
         # Limit to TUTOR_RETRIEVAL_LIMIT facts and sync other fields
         limit = settings.TUTOR_RETRIEVAL_LIMIT
         

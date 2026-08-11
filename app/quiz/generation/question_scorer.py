@@ -106,6 +106,7 @@ class QuestionScorer:
         self,
         weights: Optional[Dict[str, float]] = None,
         min_acceptable_score: float = None,
+        min_scores: Optional[Dict[str, float]] = None,
     ):
         """
         Initialize the question scorer.
@@ -113,6 +114,7 @@ class QuestionScorer:
         Args:
             weights: Dictionary of dimension weights. If None, uses defaults.
             min_acceptable_score: Minimum score for a question to be acceptable.
+            min_scores: Minimum scores for individual dimensions.
         """
         self.weights = weights or DEFAULT_WEIGHTS.copy()
         self.min_acceptable_score = (
@@ -120,6 +122,7 @@ class QuestionScorer:
             if min_acceptable_score is not None
             else settings.DEFAULT_MIN_SCORE
         )
+        self.min_scores = min_scores or {}
 
     # =========================================================================
     # PUBLIC API
@@ -186,7 +189,7 @@ class QuestionScorer:
         self, question: Dict[str, Any], facts: Optional[List[Dict[str, Any]]] = None
     ) -> Tuple[bool, float, Dict[str, float], List[str]]:
         """
-        Check if a question meets the quality threshold.
+        Check if a question meets the quality threshold and dimension floors.
 
         Args:
             question: The question dictionary to check
@@ -197,6 +200,14 @@ class QuestionScorer:
         """
         total, scores, issues = self.score_question(question, facts)
         is_acceptable = total >= self.min_acceptable_score
+        
+        # Check dimension floors (independently of overall threshold)
+        if self.min_scores:
+            for dim, floor in self.min_scores.items():
+                if scores.get(dim, 0) < floor:
+                    is_acceptable = False
+                    issues.append(f"Dimension {dim} score {scores.get(dim, 0)} below floor {floor}")
+                    # No break, collect all floor violations
         
         if not is_acceptable:
             logger.warning(
@@ -330,7 +341,7 @@ class QuestionScorer:
             # Neutral instead of harsh penalty.
             scores.append(0.8)
 
-        from .question_grounding import explanation_supported_by_fact
+        from app.quiz.validation.question_grounding import explanation_supported_by_fact
 
         explanation = question.get("explanation", "")
         supporting_fact = question.get("supporting_fact", "")

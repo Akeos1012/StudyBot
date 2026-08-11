@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 from app.quiz.generation.quiz_generator import QuizGenerator
 from app.monitoring.metrics_context import MetricsContext
 from app.monitoring.quiz_metrics import QuizMetrics
-from app.quiz.validation.question_validator import is_valid_question
 
 # ... (keep existing imports and fixture)
 
@@ -22,59 +21,119 @@ def test_instrumentation_validation_failures(mock_dependencies):
         fact_cache=mock_dependencies["fact_cache"],
         llm_client=mock_dependencies["llm_client"]
     )
-    
-    # Mock LLM and parser to return a question
+
     question = {
-        "question": "What is Cloud Computing?",
+        "question": "Which technology provides computing resources over a network?",
         "options": ["A) A", "B) B", "C) C", "D) D"],
         "correct": "A",
         "type": "multiple_choice",
         "concept": "Cloud Computing"
     }
-    
-    mock_dependencies["llm_client"].generate.return_value = json.dumps({"questions": [question]})
-    gen.parser.parse = MagicMock(return_value={"questions": [question]})
-    gen.parser.extract_questions = MagicMock(return_value=[question])
-    
-    metrics = QuizMetrics(topic="Cloud")
-    context = MetricsContext(quiz_metrics=metrics, topic="Cloud")
-    
-    # Patch validate_semantic to fail
-    with patch("app.quiz.generation.quiz_generator.validate_semantic", return_value=False):
-        # We need to mock other validators to ensure they pass
-        with patch("app.quiz.generation.quiz_generator.validate_structure", return_value=True), \
-             patch("app.quiz.generation.quiz_generator.validate_distractors", return_value=True), \
-             patch("app.quiz.generation.quiz_generator.validate_domain_correctness", return_value=True), \
-             patch("app.quiz.generation.quiz_generator.is_relevant_to_topic", return_value=True):
-            
-            gen.generate_questions(
-                topic="Cloud",
-                count=1,
-                supporting_facts=[{"concept": "Cloud Computing", "definition": "Fact Fact Fact", "topic": "Cloud", "source": "test.md"}],
 
-                metrics_context=context
-            )
-    assert metrics.validation_failures.get("semantic") >= 1
+    mock_dependencies["llm_client"].generate.return_value = json.dumps(
+        {"questions": [question]}
+    )
+
+    gen.parser.parse = MagicMock(
+        return_value={"questions": [question]}
+    )
+
+    gen.parser.extract_questions = MagicMock(
+        return_value=[question]
+    )
+
+    gen.distractor_selector.select_distractors = MagicMock(
+        return_value=["B", "C", "D"]
+    )
+
+    metrics = QuizMetrics(topic="Cloud")
+    context = MetricsContext(
+        quiz_metrics=metrics,
+        topic="Cloud"
+    )
+
+    with patch(
+        "app.quiz.generation.quiz_generator.validate_structure",
+        return_value=True
+    ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_distractors",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_grounding",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.is_relevant_to_topic",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.question_equals_answer",
+            return_value=False
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_question_focus",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_question_uniqueness",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_semantic",
+            return_value=False
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_domain_correctness",
+            return_value=True
+        ):
+
+        gen.generate_questions(
+            topic="Cloud",
+            count=1,
+            supporting_facts=[
+                {
+                    "concept": "Cloud Computing",
+                    "definition": "Fact Fact Fact",
+                    "topic": "Cloud",
+                    "source": "test.md"
+                }
+            ],
+            metrics_context=context
+        )
+
+    assert metrics.validation_failures.get("semantic", 0) >= 1
 
 def test_generation_reliability_retry_logic(mock_dependencies):
-    # Setup generator to fail the first attempt, then succeed
     gen = QuizGenerator(
         cache=mock_dependencies["cache"],
         fact_cache=mock_dependencies["fact_cache"],
         llm_client=mock_dependencies["llm_client"]
     )
-    
-    # Mock distractor selector to return 3 distractors
-    gen.distractor_selector.select_distractors = MagicMock(return_value=["B", "C", "D"])
 
-    # Valid question that passes all validators
+    # The generator itself builds the final options from the
+    # distractors returned by the selector.
+    gen.distractor_selector.select_distractors = MagicMock(
+        return_value=[
+            "Platform as a Service",
+            "Infrastructure as a Service",
+            "Software as a Service"
+        ]
+    )
+
     valid_question = {
-        "question": "What is Cloud Computing?",
-        "options": ["A) Cloud Computing", "B) B", "C) C", "D) D"],
+        "question": "Which technology provides computing resources over a network?",
+        "options": [
+            "A) Cloud Computing",
+            "B) Platform as a Service",
+            "C) Infrastructure as a Service",
+            "D) Software as a Service"
+        ],
         "correct": "A",
         "correct_text": "Cloud Computing",
-        "explanation": "Cloud computing provides computing resources.",
-        "supporting_fact": "Cloud computing provides computing resources.",
+        "explanation": "Cloud computing provides computing resources over a network.",
+        "supporting_fact": "Cloud computing provides computing resources over a network.",
         "source_note": "test.md",
         "fact_id": "f1",
         "topic": "Cloud",
@@ -83,46 +142,96 @@ def test_generation_reliability_retry_logic(mock_dependencies):
         "concept_type": "concept",
         "cognitive_type": "recognition"
     }
-    
-    valid_parsed_response = {"questions": [valid_question]}
 
-    # Force failure on first call, success on second
+    valid_parsed_response = {
+        "questions": [valid_question]
+    }
+
+    # Attempt 1 -> parsing failure.
+    # Attempt 2 -> valid response.
     mock_dependencies["llm_client"].generate.side_effect = [
         "INVALID JSON",
-        json.dumps(valid_question)
+        json.dumps({"questions": [valid_question]})
     ]
-    
-    # Mock parser to return None for first, and valid container for second
+
     def parse_side_effect(raw):
         print(f"DEBUG: parser.parse called with: {raw}")
+
         if raw == "INVALID JSON":
             return None
+
         return valid_parsed_response
 
-    gen.parser.parse = MagicMock(side_effect=parse_side_effect)
-    
-    # Mock extract_questions to return the parsed question list
-    def extract_side_effect(parsed):
-        print(f"DEBUG: parser.extract_questions called with: {parsed}")
-        if not parsed:
-            return []
-        return [valid_question]
-
-    gen.parser.extract_questions = MagicMock(side_effect=extract_side_effect)
-    
-    # Run generation
-    question = gen.generate_with_retry(
-        fact="Cloud computing provides computing resources.",
-        answer="Cloud Computing",
-        topic="Cloud"
+    gen.parser.parse = MagicMock(
+        side_effect=parse_side_effect
     )
-    
+
+    gen.parser.extract_questions = MagicMock(
+        return_value=[valid_question]
+    )
+
+    with patch(
+        "app.quiz.generation.quiz_generator.validate_structure",
+        return_value=True
+    ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_distractors",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_grounding",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.is_relevant_to_topic",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.question_equals_answer",
+            return_value=False
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_question_focus",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_question_uniqueness",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_semantic",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_domain_correctness",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.normalize_and_validate_correct_field",
+            return_value=True
+        ), \
+        patch.object(
+            gen,
+            "_check_quality",
+            return_value=(True, 1.0, {})
+        ), \
+        patch.object(
+            gen.retriever,
+            "retrieve",
+            return_value=[]
+        ):
+
+        question = gen.generate_with_retry(
+            fact="Cloud computing provides computing resources over a network.",
+            answer="Cloud Computing",
+            topic="Cloud"
+        )
+
     assert question is not None
-    # Find the correct letter for "Cloud Computing"
-    correct_letter = question["correct"]
-    correct_option = next(opt for opt in question["options"] if opt.startswith(f"{correct_letter})"))
-    assert "Cloud Computing" in correct_option
-    
+    assert question["correct_text"] == "Cloud Computing"
+    assert "Cloud Computing" in question["options"]
+    assert len(question["options"]) == 4
+
     assert mock_dependencies["llm_client"].generate.call_count == 2
 
 def test_retry_exhaustion_records_failure(mock_dependencies):

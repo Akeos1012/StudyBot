@@ -32,7 +32,12 @@ RULES:
 3. Structure: EXACTLY 4 options, labeled A), B), C), D).
 4. Correctness: The 'correct' field must be the letter (e.g., "A").
 5. Quality: Do NOT generate an explanation (leave empty).
-6. Focus: Focus on the TARGET CONCEPT'S unique role or behavior. Do not ask for definitions.
+6. Focus: Questions must test understanding of the TARGET CONCEPT's function, role, behavior, application, or purpose.
+   DO NOT generate questions that only ask for a definition (e.g., "What is [Concept]?").
+   DO NOT generate questions where the question itself is just "What is [Concept]?" or equivalent.
+   The question must test functional understanding or context (e.g., "How does [Concept] enable [Feature]?", "What is the primary role of [Concept] in [Process]?").
+   Questions MUST be grounded in the fact provided.
+   DO NOT invent information not supported by the FACT.
 
 REQUIRED JSON FORMAT:
 {{

@@ -18,46 +18,116 @@ def test_generated_question_has_source_traceability(mock_dependencies):
         fact_cache=mock_dependencies["fact_cache"],
         llm_client=mock_dependencies["llm_client"]
     )
-    
+
     # Mock LLM and parser to return a question with metadata
     question = {
-        "question": "What is Cloud Computing?",
-        "options": ["A) A", "B) B", "C) C", "D) D"],
+        "question": "Which technology provides computing resources over a network?",
+        "options": [
+            "A) Cloud Computing",
+            "B) Platform as a Service",
+            "C) Infrastructure as a Service",
+            "D) Software as a Service"
+        ],
         "correct": "A",
         "type": "multiple_choice",
         "concept": "Cloud Computing",
         "explanation": "Cloud computing provides computing resources."
     }
-    
-    mock_dependencies["llm_client"].generate.return_value = json.dumps({"questions": [question]})
-    gen.parser.parse = MagicMock(return_value={"questions": [question]})
-    gen.parser.extract_questions = MagicMock(return_value=[question])
-    
-    # Mock validators to pass
-    with patch("app.quiz.validation.question_validator.validate_structure", return_value=True), \
-         patch("app.quiz.validation.question_validator.validate_distractors", return_value=True), \
-         patch("app.quiz.validation.question_semantic.validate_semantic", return_value=True), \
-         patch("app.quiz.validation.domain_validator.validate_domain_correctness", return_value=True), \
-         patch("app.quiz.validation.question_validator.is_relevant_to_topic", return_value=True):
 
-        fact = {"concept": "Cloud Computing", "definition": "Fact about cloud", "topic": "Cloud", "source": "test.md", "fact_id": "f123"}
-        
+    mock_dependencies["llm_client"].generate.return_value = json.dumps(
+        {"questions": [question]}
+    )
+
+    gen.parser.parse = MagicMock(
+        return_value={"questions": [question]}
+    )
+
+    gen.parser.extract_questions = MagicMock(
+        return_value=[question]
+    )
+
+    gen.distractor_selector.select_distractors = MagicMock(
+        return_value=[
+            "Platform as a Service",
+            "Infrastructure as a Service",
+            "Software as a Service"
+        ]
+    )
+
+    fact = {
+        "concept": "Cloud Computing",
+        "definition": "Cloud computing provides computing resources over a network.",
+        "topic": "Cloud",
+        "source": "test.md",
+        "fact_id": "f123"
+    }
+
+    # Patch the references used directly by QuizGenerator.
+    with patch(
+        "app.quiz.generation.quiz_generator.validate_structure",
+        return_value=True
+    ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_distractors",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_grounding",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.is_relevant_to_topic",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.question_equals_answer",
+            return_value=False
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_question_focus",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_question_uniqueness",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_semantic",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.validate_domain_correctness",
+            return_value=True
+        ), \
+        patch(
+            "app.quiz.generation.quiz_generator.normalize_and_validate_correct_field",
+            return_value=True
+        ), \
+        patch.object(
+            gen,
+            "_check_quality",
+            return_value=(True, 1.0, {})
+        ):
+
         result = gen.generate_questions(
             topic="Cloud",
             count=1,
             supporting_facts=[fact]
         )
-        
+
+    assert result["questions"]
+
     generated_question = result["questions"][0]
-    # Verify it exists and is populated, don't enforce exact value
-    assert "fact_id" in generated_question
-    assert generated_question["fact_id"].startswith("fact_")
-    assert "supporting_fact" in generated_question
-    assert "source_note" in generated_question
-    # Traceability confirms that QuizGenerator maps input fact source to source_note
-    # The pipeline might be using a real note path from fact_cache injection or the mock input.
-    assert generated_question["source_note"] in ["test.md", "sample_notes\\Cloud\\Block Storage.md"]
-    assert "explanation" in generated_question
+
+    assert generated_question["source_note"] == "test.md"
+    assert generated_question["fact_id"] == "f123"
+    assert generated_question["supporting_fact"] == (
+        "Cloud computing provides computing resources over a network."
+    )
+    assert generated_question["topic"] == "Cloud"
+    assert generated_question["concept"] == "Cloud Computing"
+
+
 
 def test_question_cache_preserves_traceability(mock_dependencies):
     gen = QuizGenerator(

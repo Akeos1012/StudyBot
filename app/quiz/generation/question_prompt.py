@@ -33,8 +33,10 @@ RULES:
 4. Correctness: The 'correct' field must be the letter (e.g., "A").
 5. Quality: Do NOT generate an explanation (leave empty).
 6. Focus: Questions must test understanding of the TARGET CONCEPT's function, role, behavior, application, or purpose.
+   AVOID direct definition-style questions. 
+   If the FACT is a definition, transform it into a question about the process, purpose, or scenario, rather than asking for the concept name.
    DO NOT generate questions that only ask for a definition (e.g., "What is [Concept]?").
-   DO NOT generate questions where the question itself is just "What is [Concept]?" or equivalent.
+   DO NOT generate questions where the question itself is just "What is [Concept]?" or "Which technique is [Concept]?" or equivalent.
    The question must test functional understanding or context (e.g., "How does [Concept] enable [Feature]?", "What is the primary role of [Concept] in [Process]?").
    Questions MUST be grounded in the fact provided.
    DO NOT invent information not supported by the FACT.

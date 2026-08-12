@@ -975,9 +975,11 @@ class QuizGenerator:
                         print("❌ Skipping unsupported question type")
                         continue
 
+                    # Combine current batch and persistent pool for duplicate detection
+                    full_pool = valid_questions + (self.cache.get_pool(topic=topic) or [])
                     if is_similar_to_pool(
                         question,
-                        valid_questions,
+                        full_pool,
                         threshold=SIMILARITY_THRESHOLD
                     ):
                         if metrics_context and metrics_context.quiz_metrics:

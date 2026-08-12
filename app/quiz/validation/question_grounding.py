@@ -412,13 +412,14 @@ def attach_grounding_fields(
 
 def question_equals_answer(question_text: str, options: list) -> bool:
     """Check if the question is just restating the correct answer."""
+    from app.quiz.utils.options_parser import extract_option_text
+
     q_clean = question_text.strip().lower().rstrip(".?")
     for opt in options:
         opt_text = extract_option_text(opt).lower().rstrip(".")
         if (
             opt_text
             and (opt_text in q_clean or q_clean in opt_text)
-            and len(opt_text) > 20
         ):
             logger.warning("Question restates answer: '%s...'", opt_text[:40])
             return True

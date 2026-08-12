@@ -8,150 +8,33 @@ def build_fill_blank_question(
 
     text = definition.strip()
 
-    # Remove concept prefix with separators
-    text = re.sub(
-        rf"^{re.escape(concept)}\s*[-–:]*\s*",
-        "",
-        text,
+    # 1. Identify the core sentence containing the concept
+    # If the concept is in the definition, find the sentence containing it.
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+
+    target_sentence = ""
+    for sentence in sentences:
+        if re.search(rf"\b{re.escape(concept)}\b", sentence, re.IGNORECASE):
+            target_sentence = sentence
+            break
+
+    if not target_sentence:
+        # Fallback to full text if concept not found in sentences
+        target_sentence = text
+
+    # 2. Replace concept with blank
+    question_text = re.sub(
+        rf"\b{re.escape(concept)}\b",
+        "_______",
+        target_sentence,
         flags=re.IGNORECASE
     )
 
-    # Remove abbreviation leftovers like "(App Sec)"
-    text = re.sub(
-        r"^\([^)]*\)\s*",
-        "",
-        text
-    )
+    # 3. Final cleaning
+    question_text = question_text.strip()
 
-    # Remove duplicated concept variants
-    concept_words = concept.split()
-    concept_pattern = r"\s+".join(
-        map(re.escape, concept_words)
-    )
+    # Ensure it ends with punctuation
+    if not question_text.endswith(('.', '?', '!')):
+        question_text += '.'
 
-    text = re.sub(
-        rf"^{concept_pattern}\s*[-–:]*\s*",
-        "",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    # Remove concept mentions and known aliases inside the definition
-
-    concept_aliases = [
-        concept,
-        concept.replace(" ", "-"),
-        concept.replace("-", " "),
-    ]
-
-    # Known abbreviation patterns
-    if "dom" in concept.lower() and "xss" in concept.lower():
-        concept_aliases.extend([
-            "DOM-based XSS",
-            "DOM based XSS",
-            "DOM XSS",
-            "DOM-based Cross-Site Scripting",
-            "DOM based Cross-Site Scripting",
-        ])
-
-    for alias in concept_aliases:
-        text = re.sub(
-            rf"\b{re.escape(alias)}\b",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
-
-    # Remove empty parentheses left after alias removal
-    text = re.sub(
-        r"\(\s*\)",
-        "",
-        text
-    )
-
-    # Remove leftover separators
-    text = re.sub(
-        r"\s*[-–:]\s*",
-        " ",
-        text
-    )
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        text
-    ).strip()
-
-    # Clean leftover punctuation
-    text = re.sub(
-        r"^\s*[-–:]\s*",
-        "",
-        text
-    )
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        text
-    ).strip()
-
-    # Restore grammar after blank
-    grammar_patterns = [
-        (
-            r"^(practice|method|system|service|technology|model|process|security)\b",
-            r"is a \1"
-        ),
-        (
-            r"^(unique|random|cloud|physical|software|digital)\b",
-            r"is a \1"
-        ),
-    ]
-
-    for pattern, replacement in grammar_patterns:
-        text = re.sub(
-            pattern,
-            replacement,
-            text,
-            flags=re.IGNORECASE
-        )
-
-    # Remove remaining concept variants
-    concept_variants = [
-        concept,
-        concept.replace("-", " "),
-        concept.replace(" ", "-"),
-        concept.replace(" ", ""),
-    ]
-
-    for variant in concept_variants:
-        text = re.sub(
-            rf"\b{re.escape(variant)}\b",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
-
-    # Clean spacing after removal
-    text = re.sub(r"\s+", " ", text).strip()
-
-    # Restore grammar after removing concept
-    if text.startswith(("A ", "An ", "The ")):
-        text = text[0].lower() + text[1:]
-
-    # Remove dangling articles before verbs
-    text = re.sub(
-        r"^(a|an|the)\s+(refers to|means|is|are)\s+",
-        r"\2 ",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    # Normalize definition-style openings
-    text = re.sub(
-        r"^(refers to|means|is|are)\s+",
-        "",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    return f"_______ is {text}"
+    return question_text

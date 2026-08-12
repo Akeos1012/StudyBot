@@ -33,24 +33,30 @@ class FillBlankGenerator:
         return text
 
     def _clean_question_text(self, text: str) -> str:
-        text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+        # 1. Normalize whitespace
+        text = re.sub(r"\s+", " ", text).strip()
 
-        replacements = {
-            "computingand": "computing and",
-            "organizationson-demand": "organizations on-demand",
-            "handledby": "handled by",
-            "systemswhere": "systems where",
-            "cloud-basedinfrastructure": "cloud-based infrastructure",
-            "anywhereusing": "anywhere using",
-        }
-
-        for bad, good in replacements.items():
-            text = text.replace(bad, good)
-
-        text = re.sub(r"\s+", " ", text)
-
-        # Normalize all blank styles to exactly 7 underscores
+        # 2. Normalize all blank styles to exactly 7 underscores
         text = re.sub(r'_{3,}', '_______', text)
+
+        # 3. Ensure exactly one blank placeholder
+        parts = text.split("_______")
+        if len(parts) > 2:
+            # Join everything after the first blank and remove additional blanks
+            text = parts[0] + "_______" + "".join(parts[1:]).replace("_______", "")
+        
+        # 4. Remove duplicate sentence fragments and artifacts
+        # This is a basic repair; might need more specific rules if problems persist
+        text = re.sub(r"\s+is\s+It\s+is\s+", " is ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s+An\s+is\s+", " is ", text, flags=re.IGNORECASE)
+        
+        # 5. Fix capitalization after blank
+        text = re.sub(r"_______ ([A-Z])", lambda m: "_______ " + m.group(1).lower(), text)
+        
+        # 6. Ensure proper punctuation
+        text = text.rstrip(".,:;!? ")
+        if not text.endswith(('.', '?')):
+            text += "."
 
         return text.strip()
 
@@ -111,18 +117,6 @@ class FillBlankGenerator:
 
             question_text = self._clean_question_text(question_text)
 
-            # Remove duplicate blanks
-            while question_text.count("_______") > 1:
-                parts = question_text.split("_______")
-
-                question_text = (
-                    parts[0]
-                    + "_______"
-                    + "".join(parts[1:]).replace("_______", "")
-                )
-
-            question_text = self._clean_question_text(question_text)
-
             # Remove leaked concept from generated question
             concept_pattern = re.compile(
                 re.escape(concept),
@@ -161,6 +155,9 @@ class FillBlankGenerator:
                 logger.warning("Invalid blank position.")
                 continue
 
+            if self._is_trivial_fill_blank(question_text):
+                logger.warning("Trivial definition-style question.")
+                continue
 
             if not self._validate_blank_replacement(
                 question_text,
@@ -256,6 +253,14 @@ class FillBlankGenerator:
                 return False
 
         return True
+
+    def _is_trivial_fill_blank(self, question_text: str) -> bool:
+        """Detect trivial definition-style fill-in-the-blank questions."""
+        # Normalize whitespace
+        text = re.sub(r"\s+", " ", question_text).strip()
+        # Pattern: starts with _______, then space, then is/are/was/were
+        pattern = re.compile(r"^_______\s+(is|are|was|were)\b", re.IGNORECASE)
+        return bool(pattern.match(text))
 
     def _validate_blank_replacement(
         self,

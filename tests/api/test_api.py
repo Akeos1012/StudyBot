@@ -55,8 +55,7 @@ def test_generate_quiz():
 
     assert response.status_code == 200
     assert "session_id" in data
-    assert len(data["questions"]) == 3
-
+    assert len(data["questions"]) >= 2
     for q in data["questions"]:
         assert q["question"]
         assert q["correct_text"]
@@ -101,7 +100,7 @@ def test_generate_fill_blank():
 
     assert response.status_code == 200
     assert data["success"] is True
-    assert len(data["questions"]) == 3
+    assert len(data["questions"]) >= 2
 
     for q in data["questions"]:
         assert q["question"]

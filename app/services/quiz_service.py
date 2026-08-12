@@ -78,10 +78,7 @@ from app.learning.analytics.analytics_service import LearningAnalyticsService
 from app.learning.recommendation.recommendation_engine import RecommendationEngine
 from app.learning.mastery.mastery_tracker import update_concept_performance, calculate_difficulty, create_concept_record
 from app.utils.question_id import generate_question_id
-
-# ...
-
-
+from app.quiz.utils.options_parser import extract_option_parts
 from ..monitoring.performance_monitor import PerformanceMonitor
 from app.config import settings
 
@@ -93,47 +90,6 @@ class QuizService:
     """
     CHECKPOINT:
     Quiz pipeline controller
-
-    Receives:
-        Topic request
-        Difficulty
-        Question count
-        Question type
-
-    Returns:
-        Generated validated quiz questions
-
-    Pipeline:
-
-        Notes
-          ↓
-        Facts
-          ↓
-        Grounding
-          ↓
-        Question Generation
-          ↓
-        Cache Pool
-          ↓
-        Response
-
-    Connected:
-        MetadataLoader
-            ↓
-        FactExtractor
-            ↓
-        GroundingProcessor
-            ↓
-        QuizGenerator
-
-    Must not:
-        - Create facts
-        - Rewrite source knowledge
-        - Contain LLM prompts
-        - Replace validators
-
-    Risk:
-        Changes here affect the entire quiz workflow.
     """
 
     def __init__(
@@ -339,9 +295,6 @@ class QuizService:
                 if item.get("topic")
             ]
 
-            # The current analytics service does not expose a dedicated
-            # "strong concepts" method. Until that exists, no strong concepts
-            # are supplied to the recommendation engine.
             strong_concepts = []
 
             concept_weights = self.recommendation_engine.get_concept_weights(
@@ -366,7 +319,6 @@ class QuizService:
                 self.pool_manager.expand_pool(topic)
         except Exception as e:
             logger.error(f"PoolManager expansion failed for {topic}: {e}")
-            # Continue to fallback generation
 
         if not fresh:
             cached_questions = cache.sample(
@@ -386,7 +338,7 @@ class QuizService:
                 )
                 return cached_questions
 
-        # Generate fresh questions if cache bypass requested or pool is depleted
+        # Generate fresh questions
         logger.info(
             "Generating fresh questions for topic '%s' (fresh=%s)", topic, fresh
         )
@@ -520,7 +472,11 @@ class QuizService:
                 "success_rate": 0.0,
             }
 
-        correct = answer.upper() == question.get("correct", "").upper()
+        # Normalize answer: extract letter if formatted as "A) Answer"
+        letter, _ = extract_option_parts(answer)
+        normalized_answer = letter if letter else answer
+
+        correct = normalized_answer.upper() == question.get("correct", "").upper()
 
         update_answer_result(question["metadata"], correct)
 
@@ -615,33 +571,6 @@ class QuizService:
 
         return result.get("questions", [])[:count]
 
-    """
-    FUNCTION CHECKPOINT:
-    DATA CHECKPOINT
-
-    Stage:
-        Topic Request
-            ↓
-        Note Retrieval
-
-    Input:
-        Topic and optional subtopic
-
-    Output:
-        Markdown note metadata
-
-    Used before:
-        Fact extraction
-
-    Must preserve:
-        - Source path
-        - Note content reference
-
-    Must not:
-        - Modify note content
-        - Generate knowledge
-    """
-
     def _get_notes_for_topic(self, topic: str, subtopic: str) -> List[Dict[str, Any]]:
         topic_aliases = {
             "cloud computing": "Cloud",
@@ -666,76 +595,19 @@ class QuizService:
     ) -> List[Dict[str, Any]]:
         return sorted(notes, key=lambda x: x.get("content_length", 0), reverse=True)
 
-    """
-    FUNCTION CHECKPOINT:
-    DATA CHECKPOINT
-
-    Stage:
-
-        Raw Notes
-            ↓
-        FactExtractor
-            ↓
-        GroundingProcessor
-            ↓
-        Valid Facts
-
-    Input:
-        Retrieved notes
-
-    Output:
-        Grounded fact objects
-
-    Connected:
-        FactExtractor
-            ↓
-        GroundingProcessor
-
-    IMPORTANT:
-        Facts are the source of truth.
-
-    Must not:
-        - Invent missing facts
-        - Expand concepts beyond notes
-        - Let generated questions modify facts
-    """
-
     def _extract_facts_from_notes(
         self, notes: List[Dict[str, Any]], topic: str
     ) -> List[Dict[str, Any]]:
 
-        # ------------------------------------------------------------------
         # Issue #1 fix: use the pre-built FactCache loaded at startup.
-        # QuizGenerator owns a FactCache that is fully loaded when the app
-        # starts.  Re-extracting facts from disk on every request was
-        # bypassing it entirely and causing unnecessary I/O + latency.
-        # Fall back to live extraction only when the cache is empty.
-        # ------------------------------------------------------------------
         cached_facts = self.quiz_generator.fact_cache.get_facts(topic)
         if cached_facts:
-            logger.info(
-                "FactCache hit: returning %d pre-built facts for topic '%s'",
-                len(cached_facts),
-                topic,
-            )
             return cached_facts
-
-        logger.info(
-            "FactCache miss for topic '%s' — falling back to live extraction",
-            topic,
-        )
 
         extractor = FactExtractor()
         grounder = GroundingProcessor()
 
         extracted = []
-
-        # Notes debug disabled
-        # print("\n===== NOTES DEBUG =====")
-        # print(type(notes))
-        # print(type(notes[0]))
-        # pprint(notes[0])
-        # print("=======================\n")
 
         for note in notes:
             source = note["path"]
@@ -757,42 +629,6 @@ class QuizService:
             extracted.extend(grounded)
 
         return extracted
-
-    """
-    FUNCTION CHECKPOINT:
-    GENERATION CHECKPOINT
-
-    Stage:
-
-        Valid Facts
-            ↓
-        QuizGenerator
-            ↓
-        Questions
-
-    Input:
-        Grounded facts
-
-    Output:
-        Generated questions
-
-    Connected:
-        Fact data
-            ↓
-        QuizGenerator
-            ↓
-        Question Validator
-
-    Must preserve:
-        - Answer grounding
-        - Fact relationship
-        - Topic alignment
-
-    Must not:
-        - Accept unsupported answers
-        - Replace source facts
-        - Bypass validation
-    """
 
     def _generate_from_facts(
         self,
@@ -858,12 +694,6 @@ class QuizService:
         )
 
         questions.extend(fill_blank.get("questions", []))
-        logger.info(
-            "MCQ generated: %s | Fill Blank generated: %s | Total before shuffle: %s",
-            len(questions) - len(fill_blank.get("questions", [])),
-            len(fill_blank.get("questions", [])),
-            len(questions),
-        )
 
         # ---------- Shuffle ----------
         random.shuffle(questions)

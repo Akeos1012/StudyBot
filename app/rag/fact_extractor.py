@@ -328,6 +328,22 @@ class SemanticConceptExtractor:
         "performing",
         "executes",
         "executing",
+        "repeats",
+        "produces",
+    }
+
+    # Adverbs that should never start a concept
+    ADVERB_STARTS = {
+        "commonly",
+        "usually",
+        "typically",
+        "generally",
+        "frequently",
+        "often",
+        "rarely",
+        "normally",
+        "mostly",
+        "largely",
     }
 
     # Filler words that should never start a concept
@@ -503,7 +519,8 @@ class SemanticConceptExtractor:
         # Pattern 2: "X allows/stores..." - subject is X
         match = re.search(
             r"^([A-Z][a-zA-Z\s]{2,})\s+(allows|enables|provides|stores|manages|"
-            r"reduces|improves|uses|supports|offers|helps|contains|includes)",
+            r"reduces|improves|uses|supports|offers|helps|contains|includes|"
+            r"repeats|produces|creates|generates|involves|describes|defines|comprises|consists)",
             text,
             re.IGNORECASE,
         )
@@ -628,9 +645,25 @@ class SemanticConceptExtractor:
             "execute",
             "runs",
             "run",
+            "repeats",
+            "repeat",
+            "improves",
+            "improve",
         }
 
         if any(word.lower() in sentence_words for word in words):
+            return False
+
+        # Reject concepts containing fragment markers anywhere
+        fragment_markers = {
+            "until",
+            "because",
+            "since",
+            "while",
+            "when",
+            "where",
+        }
+        if any(word.lower() in fragment_markers for word in words):
             return False
 
         return True
@@ -668,6 +701,11 @@ class SemanticConceptExtractor:
         # 1. REJECT filler starts
         if first_word in self.FILLER_STARTS:
             logger.debug(f"Rejected '{concept}': starts with filler '{first_word}'")
+            return False
+
+        # 1.1 REJECT adverb starts
+        if first_word in self.ADVERB_STARTS:
+            logger.debug(f"Rejected '{concept}': starts with adverb '{first_word}'")
             return False
 
         # 2. REJECT verb starts

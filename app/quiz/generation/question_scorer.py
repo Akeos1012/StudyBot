@@ -7,6 +7,7 @@
 # Quality measurements belong here.
 
 import logging
+import re
 from typing import Dict, List, Any, Tuple, Optional
 
 from ..utils.options_parser import (
@@ -313,8 +314,16 @@ class QuestionScorer:
             scores.append(0.8)
 
         elif correct_lower in question_text:
-            # Direct concept question is acceptable
-            scores.append(1.0)
+            # Check for trivial "What is..." definition copying
+            trivial_pattern = re.compile(
+                r"^(what|which|describe)\s+(is|are|was|were|defines)\s+" + re.escape(correct_lower),
+                re.IGNORECASE
+            )
+            if trivial_pattern.search(question_text):
+                scores.append(0.5) # Penalize trivial questions
+            else:
+                # Direct concept question is acceptable if not trivial
+                scores.append(0.9)
 
         else:
             scores.append(0.8)

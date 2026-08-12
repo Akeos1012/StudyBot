@@ -229,7 +229,8 @@ def test_generation_reliability_retry_logic(mock_dependencies):
 
     assert question is not None
     assert question["correct_text"] == "Cloud Computing"
-    assert "Cloud Computing" in question["options"]
+    assert any("Cloud Computing" in opt for opt in question["options"])
+
     assert len(question["options"]) == 4
 
     assert mock_dependencies["llm_client"].generate.call_count == 2

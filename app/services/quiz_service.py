@@ -144,6 +144,7 @@ class QuizService:
         recommendation_engine,
         quiz_session_service,
         analytics_repository,
+        analytics_service,
     ):
         self.metadata_loader = metadata_loader
         self.quiz_generator = quiz_generator
@@ -151,6 +152,7 @@ class QuizService:
         self.recommendation_engine = recommendation_engine
         self.quiz_session_service = quiz_session_service
         self.analytics_repository = analytics_repository
+        self.analytics_service = analytics_service
 
     def create_quiz_session(
         self,
@@ -325,9 +327,27 @@ class QuizService:
         cache = self.quiz_generator.cache
 
         concept_weights = None
+
         if personalize and user_context and user_context.user_id:
-            summary = self.analytics_service.get_learning_summary(user_context, topic)
-            concept_weights = self.recommendation_engine.get_concept_weights(summary)
+            weak_topics = self.analytics_service.get_weak_topics(
+                user_context.user_id
+            )
+
+            weak_concepts = [
+                item["topic"]
+                for item in weak_topics
+                if item.get("topic")
+            ]
+
+            # The current analytics service does not expose a dedicated
+            # "strong concepts" method. Until that exists, no strong concepts
+            # are supplied to the recommendation engine.
+            strong_concepts = []
+
+            concept_weights = self.recommendation_engine.get_concept_weights(
+                weak_concepts,
+                strong_concepts,
+            )
 
         if fresh:
             logger.info(f"Clearing cache for {topic}")

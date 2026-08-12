@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 from app.services.quiz_service import QuizService
 from app.models.user_context import UserContext
 from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.analytics.analytics_service import LearningAnalyticsService
 from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 @pytest.fixture
@@ -13,9 +14,10 @@ def mock_quiz_service():
     mock_recommendation = MagicMock(spec=RecommendationEngine)
     mock_session = MagicMock()
     mock_repository = MagicMock(spec=AnalyticsRepository)
+    mock_analytics_service = MagicMock(spec=LearningAnalyticsService)
     
     return QuizService(
-        mock_meta, mock_gen, mock_pool, mock_recommendation, mock_session, mock_repository
+        mock_meta, mock_gen, mock_pool, mock_recommendation, mock_session, mock_repository, mock_analytics_service
     ), mock_repository
 
 def test_adaptive_disabled(mock_quiz_service):

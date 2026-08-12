@@ -7,7 +7,7 @@ from app.quiz.storage.question_cache import QuestionCache
 @pytest.fixture
 def mock_dependencies():
     return {
-        "cache": QuestionCache(), # Use a real cache instance (in-memory)
+        "cache": QuestionCache(cache_file="temp_test_cache.json"), # Use a temporary file
         "fact_cache": MagicMock(),
         "llm_client": MagicMock()
     }
@@ -109,6 +109,9 @@ def test_generated_question_has_source_traceability(mock_dependencies):
             return_value=(True, 1.0, {})
         ):
 
+        # Clear cache to avoid interference from other tests
+        gen.cache.clear_topic(topic="Cloud")
+
         result = gen.generate_questions(
             topic="Cloud",
             count=1,
@@ -118,6 +121,7 @@ def test_generated_question_has_source_traceability(mock_dependencies):
     assert result["questions"]
 
     generated_question = result["questions"][0]
+    print(f"DEBUG: generated_question: {generated_question}")
 
     assert generated_question["source_note"] == "test.md"
     assert generated_question["fact_id"] == "f123"

@@ -12,6 +12,7 @@ from app.rag.fact_cache import FactCache
 from app.rag.metadata_loader import MetadataLoader
 from app.monitoring.pool_metrics import PoolMetrics
 from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.analytics.analytics_service import LearningAnalyticsService
 from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 # Mock deterministic LLM response that passes validators
@@ -72,7 +73,8 @@ def pipeline_setup(temp_cache, mocked_llm):
         pool_manager=pool_manager,
         recommendation_engine=MagicMock(spec=RecommendationEngine),
         quiz_session_service=MagicMock(),
-        analytics_repository=MagicMock(spec=AnalyticsRepository)
+        analytics_repository=MagicMock(spec=AnalyticsRepository),
+        analytics_service=MagicMock(spec=LearningAnalyticsService)
     )
     
     return service, pool_manager, temp_cache, generator

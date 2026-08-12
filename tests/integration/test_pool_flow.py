@@ -5,6 +5,7 @@ from app.quiz.storage.pool_manager import PoolManager
 from app.quiz.storage.question_cache import QuestionCache
 
 from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.analytics.analytics_service import LearningAnalyticsService
 from app.learning.recommendation.recommendation_engine import RecommendationEngine
 
 @pytest.fixture
@@ -24,7 +25,8 @@ def integration_setup(tmp_path):
         pool_manager=pool_manager,
         recommendation_engine=MagicMock(spec=RecommendationEngine),
         quiz_session_service=MagicMock(),
-        analytics_repository=MagicMock(spec=AnalyticsRepository)
+        analytics_repository=MagicMock(spec=AnalyticsRepository),
+        analytics_service=MagicMock(spec=LearningAnalyticsService)
     )
     
     return service, pool_manager, question_cache, generator

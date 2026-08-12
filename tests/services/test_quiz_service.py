@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 from app.services.quiz_service import QuizService
 
 from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.analytics.analytics_service import LearningAnalyticsService
 
 @pytest.fixture
 def mock_dependencies():
@@ -16,7 +17,18 @@ def mock_dependencies():
 
 def test_healthy_pool_no_expansion(mock_dependencies):
     metadata_loader, quiz_generator, pool_manager, recommendation_engine, quiz_session_service, analytics_repository = mock_dependencies
-    service = QuizService(metadata_loader, quiz_generator, pool_manager, recommendation_engine, quiz_session_service, analytics_repository)
+    # Mock analytics service
+    mock_analytics_service = MagicMock(spec=LearningAnalyticsService)
+
+    service = QuizService(
+        metadata_loader,
+        quiz_generator,
+        pool_manager,
+        recommendation_engine,
+        quiz_session_service,
+        analytics_repository,
+        mock_analytics_service,
+    )
     
     # Mock healthy pool
     pool_manager.should_expand_pool.return_value = {"expand": False}
@@ -33,7 +45,18 @@ def test_healthy_pool_no_expansion(mock_dependencies):
 
 def test_unhealthy_pool_expansion_triggered(mock_dependencies):
     metadata_loader, quiz_generator, pool_manager, recommendation_engine, quiz_session_service, analytics_repository = mock_dependencies
-    service = QuizService(metadata_loader, quiz_generator, pool_manager, recommendation_engine, quiz_session_service, analytics_repository)
+    # Mock analytics service
+    mock_analytics_service = MagicMock(spec=LearningAnalyticsService)
+
+    service = QuizService(
+        metadata_loader,
+        quiz_generator,
+        pool_manager,
+        recommendation_engine,
+        quiz_session_service,
+        analytics_repository,
+        mock_analytics_service,
+    )
     
     # Mock unhealthy pool
     pool_manager.should_expand_pool.return_value = {"expand": True}

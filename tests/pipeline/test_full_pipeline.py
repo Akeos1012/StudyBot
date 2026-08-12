@@ -10,6 +10,7 @@ from app.rag.metadata_loader import MetadataLoader
 from app.learning.recommendation.recommendation_engine import RecommendationEngine
 from app.services.quiz_session_service import QuizSessionService
 from app.learning.analytics.analytics_repository import AnalyticsRepository
+from app.learning.analytics.analytics_service import LearningAnalyticsService
 
 
 @pytest.fixture
@@ -136,7 +137,8 @@ def quiz_service(
         pool_manager=pool_manager,
         recommendation_engine=MagicMock(spec=RecommendationEngine),
         quiz_session_service=MagicMock(spec=QuizSessionService),
-        analytics_repository=MagicMock(spec=AnalyticsRepository)
+        analytics_repository=MagicMock(spec=AnalyticsRepository),
+        analytics_service=MagicMock(spec=LearningAnalyticsService)
     )
 
 def test_full_pipeline_orchestration(quiz_service):

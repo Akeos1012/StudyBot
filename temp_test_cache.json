@@ -1,0 +1,80 @@
+{
+  "__metadata__": {
+    "version": 1,
+    "created": "2026-08-12T15:43:33.063679",
+    "updated": "2026-08-12T15:49:31.316800",
+    "total_pools": 2,
+    "total_questions": 2
+  },
+  "733c5a1b6664d31d3eaf5fa3a810869a": [
+    {
+      "question": "Which technology provides computing resources over a network?",
+      "options": [
+        "A) Software as a Service",
+        "B) Cloud Computing",
+        "C) Platform as a Service",
+        "D) Infrastructure as a Service"
+      ],
+      "correct": "B",
+      "type": "multiple_choice",
+      "concept": "Cloud Computing",
+      "explanation": "Cloud computing provides computing resources.",
+      "correct_text": "Cloud Computing",
+      "topic": "Cloud",
+      "subtopic": "",
+      "source_note": "test.md",
+      "fact_id": "f123",
+      "concept_type": "concept",
+      "cognitive_type": "classification",
+      "supporting_fact": "Cloud computing provides computing resources over a network.",
+      "_quality_score": 1.0,
+      "_quality_scores": {},
+      "cached_at": "2026-08-12T15:43:33.075777",
+      "metadata": {
+        "created_at": "2026-08-12T15:43:33.075777",
+        "updated_at": "2026-08-12T15:43:33.075777",
+        "usage_count": 0,
+        "last_seen": null,
+        "times_correct": 0,
+        "times_wrong": 0,
+        "success_rate": 0.0,
+        "difficulty_history": [],
+        "quality_score": 0.0
+      },
+      "usage_count": 2,
+      "last_seen": "2026-08-12T15:49:31.293712"
+    }
+  ],
+  "2cef81b6897c241a4295687021ae51ce": [
+    {
+      "question": "Q1?",
+      "options": [
+        "A) A",
+        "B) B",
+        "C) C",
+        "D) D"
+      ],
+      "correct": "A",
+      "type": "multiple_choice",
+      "concept": "C1",
+      "explanation": "Exp1",
+      "fact_id": "f1",
+      "source_note": "n1",
+      "supporting_fact": "fact1",
+      "cached_at": "2026-08-12T15:43:33.114313",
+      "metadata": {
+        "created_at": "2026-08-12T15:43:33.114313",
+        "updated_at": "2026-08-12T15:43:33.114313",
+        "usage_count": 0,
+        "last_seen": null,
+        "times_correct": 0,
+        "times_wrong": 0,
+        "success_rate": 0.0,
+        "difficulty_history": [],
+        "quality_score": 0.0
+      },
+      "usage_count": 3,
+      "last_seen": "2026-08-12T15:49:31.316800"
+    }
+  ]
+}

@@ -116,6 +116,7 @@ quiz_service = QuizService(
     recommendation_engine=recommendation_engine,
     quiz_session_service=quiz_session_service,
     analytics_repository=analytics_repository,
+    analytics_service=new_analytics_service,
 )
 
 

@@ -78,7 +78,7 @@ from ..validation.question_semantic import (
     validate_semantic,
 )
 
-from ..utils.options_parser import get_correct_text_from_options
+from ..utils.options_parser import get_correct_text_from_options, normalize_options
 
 from ..validation.question_grounding import (
     validate_grounding,
@@ -629,7 +629,8 @@ class QuizGenerator:
             # Shuffle options while keeping the correct-answer letter synchronized.
             random.shuffle(options)
 
-            question["options"] = options
+            # Format options with letter prefixes (e.g., "A) Option")
+            question["options"] = normalize_options(options)
 
             # The validator expects "correct" to identify the actual
             # position of the correct answer after shuffling.

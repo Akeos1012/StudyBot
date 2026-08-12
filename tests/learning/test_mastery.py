@@ -22,7 +22,11 @@ def test_mastery_update(mock_repo):
     mock_repo.upsert_mastery_record(
         user_id=user_context.user_id,
         concept=concept,
-        **updated_record
+        attempts=updated_record["attempts"],
+        correct_count=updated_record["correct"],
+        wrong_count=updated_record["wrong"],
+        mastery_score=updated_record["mastery"],
+        recommended_difficulty=updated_record["recommended_difficulty"]
     )
     
     # Verify call to upsert_mastery_record

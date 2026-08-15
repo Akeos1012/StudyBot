@@ -60,6 +60,7 @@ CORE DEDUPLICATION MODULE
 Changes affect cache diversity.
 """
 
+import re
 from difflib import SequenceMatcher
 from typing import Dict, List
 
@@ -105,7 +106,7 @@ def normalize(text: str) -> str:
     }
 
     for word, replacement in replacements.items():
-        text = text.replace(word, replacement)
+        text = re.sub(r"\b" + re.escape(word) + r"\b", replacement, text)
 
     return " ".join(text.split())
 

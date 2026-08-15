@@ -275,7 +275,8 @@ def clean_definition(concept: str, definition: str) -> str:
     """
     Clean fact definition.
 
-    Removes duplicated concept names inside definitions.
+    Preserves the concept name in the definition to ensure grounding validation works,
+    while removing any redundant prefix repetition.
     """
 
     if not definition:
@@ -286,20 +287,8 @@ def clean_definition(concept: str, definition: str) -> str:
     if not concept:
         return definition
 
-    # Remove concept prefix
-    pattern = rf"^{re.escape(concept)}\s*[-:–—:]?\s*"
-    definition = re.sub(
-        pattern,
-        "",
-        definition,
-        flags=re.IGNORECASE
-    )
-
-    # Restore concept as sentence subject if removal leaves weak definition
-    # Do not restore concept here.
-    # Definitions should not contain duplicated concept prefixes.
-
-    # Remove repeated concept at sentence start
+    # Remove repeated concept at sentence start, if it is clearly duplicated
+    # (e.g., "Deep Learning: Deep Learning is..." -> "Deep Learning is...")
     duplicate_pattern = (
         rf"^{re.escape(concept)}\s*[-:–—]?\s*"
         rf"{re.escape(concept)}\b\s*"
@@ -307,7 +296,7 @@ def clean_definition(concept: str, definition: str) -> str:
 
     definition = re.sub(
         duplicate_pattern,
-        "",
+        f"{concept} ",
         definition,
         flags=re.IGNORECASE
     )

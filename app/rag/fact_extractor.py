@@ -504,7 +504,6 @@ class SemanticConceptExtractor:
 
         text = text.strip()
 
-        # Pattern 1: "X is Y" - subject is X (strongest signal)
         match = re.search(
             r"^([A-Z][a-zA-Z\s]{2,})\s+(is|are|refers to|means|stands for)",
             text,
@@ -513,6 +512,7 @@ class SemanticConceptExtractor:
         if match:
             concept = match.group(1).strip()
             concept = " ".join(concept.split()[:4])
+            print(f"DEBUG: Pattern 1 matched: '{concept}'")
             if self._is_canonical_concept(concept):
                 return self._normalize_concept(concept)
 
@@ -527,6 +527,7 @@ class SemanticConceptExtractor:
         if match:
             concept = match.group(1).strip()
             concept = " ".join(concept.split()[:4])
+            print(f"DEBUG: Pattern 2 matched: '{concept}'")
             if self._is_canonical_concept(concept):
                 return self._normalize_concept(concept)
 
@@ -539,6 +540,7 @@ class SemanticConceptExtractor:
         if match:
             concept = match.group(1).strip()
             concept = " ".join(concept.split()[:4])
+            print(f"DEBUG: Pattern 3 matched: '{concept}'")
             if self._is_canonical_concept(concept):
                 return self._normalize_concept(concept)
 
@@ -699,17 +701,17 @@ class SemanticConceptExtractor:
         last_word = words[-1]
 
         # 1. REJECT filler starts
-        if first_word in self.FILLER_STARTS:
+        if first_word.lower() in {f.lower() for f in self.FILLER_STARTS}:
             logger.debug(f"Rejected '{concept}': starts with filler '{first_word}'")
             return False
 
         # 1.1 REJECT adverb starts
-        if first_word in self.ADVERB_STARTS:
+        if first_word.lower() in {a.lower() for a in self.ADVERB_STARTS}:
             logger.debug(f"Rejected '{concept}': starts with adverb '{first_word}'")
             return False
 
         # 2. REJECT verb starts
-        if first_word in self.VERB_STARTS:
+        if first_word.lower() in {v.lower() for v in self.VERB_STARTS}:
             logger.debug(f"Rejected '{concept}': starts with verb '{first_word}'")
             return False
 

@@ -130,6 +130,10 @@ class QuizService:
             exclude_ids=exclude_ids,
         )
 
+        with open("debug_questions.txt", "w") as f:
+            for q in questions:
+                f.write(f"DEBUG QUESTION: {q.get('question')[:30]} | ID: {q.get('question_id')} | TYPE: {q.get('question_type')} | CACHED: {'cached_at' in q}\n")
+                f.write(f"FULL: {q}\n")
         question_ids = [q["question_id"] for q in questions]
         session = self.quiz_session_service.create_session(
             user_id=user_id, topic=topic, difficulty=difficulty, question_ids=question_ids
@@ -238,7 +242,7 @@ class QuizService:
             if q.get("type") == "fill_blank":
                 q["question_type"] = "fillblank"
             else:
-                q["question_type"] = "multiple"
+                q["question_type"] = "multiple_choice"
         return questions[:count]
 
     def get_or_generate_questions(
@@ -307,9 +311,10 @@ class QuizService:
             cache.invalidate_topic_cache(topic, subtopic, difficulty, question_type)
 
         if question_type == "fillblank":
-            return self.generate_fill_blank_questions(
+            questions = self.generate_fill_blank_questions(
                 topic=topic, subtopic=subtopic, difficulty=difficulty, count=count
             )
+            return self._ensure_question_ids(questions, topic, subtopic)
 
         # Proactive Pool Management
         try:
@@ -325,29 +330,33 @@ class QuizService:
                 topic,
                 subtopic,
                 difficulty,
-                question_type,
+                "multiple_choice" if question_type in ("multiple", "multiple_choice") else question_type,
                 count,
                 concept_weights=concept_weights,
                 exclude_ids=exclude_ids,
-            )
+            ) or []
             if cached_questions and len(cached_questions) >= count:
                 logger.info(
                     "Serving %d cached questions from pool for topic '%s'",
                     len(cached_questions),
                     topic,
                 )
-                return cached_questions
+                return self._ensure_question_ids(cached_questions[:count], topic, subtopic)
+        else:
+            cached_questions = []
 
         # Generate fresh questions
         logger.info(
             "Generating fresh questions for topic '%s' (fresh=%s)", topic, fresh
         )
 
+        needed = count - len(cached_questions)
+        
         new_questions = self.generate_questions_for_topic(
             topic,
             subtopic,
             difficulty,
-            max(count, POOL_REFILL_AMOUNT),
+            max(needed, POOL_REFILL_AMOUNT),
             user_context=user_context,
         )
 
@@ -358,21 +367,17 @@ class QuizService:
             real_questions = [q for q in real_questions if q.get("question_id") not in exclude_ids]
 
         if real_questions:
-
             added = 0
-
             for q in real_questions:
-                q_type = q.get("question_type", "multiple")
-
+                q_type = q.get("question_type", "multiple_choice")
                 result = cache.add_to_pool(topic, subtopic, difficulty, q_type, [q])
-
                 if result:
                     added += result
-
             logger.info("Added %s new questions into pool", added)
 
-        # Return only new questions
-        result = real_questions[:count]
+        # Return cached + new questions limited to count
+        final_questions = cached_questions + real_questions
+        result = final_questions[:count]
 
         performance_data = performance_monitor.stop()
 
@@ -396,12 +401,20 @@ class QuizService:
 
         logger.info("Quiz generation completed in %.2fs", time.time() - start_time)
 
-        for q in result:
+        return self._ensure_question_ids(result, topic, subtopic)
+
+    def _ensure_question_ids(
+        self, questions: List[Dict[str, Any]], topic: str, subtopic: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Ensure every question has deterministic question_id, topic, and subtopic set.
+        """
+        for q in questions:
             q["topic"] = topic
             q["subtopic"] = subtopic
-            q["question_id"] = generate_question_id(q.get("question", ""))
-
-        return result
+            if not q.get("question_id"):
+                q["question_id"] = generate_question_id(q.get("question", ""))
+        return questions
 
     def submit_session_answer(
         self, session_id: str, question_id: str, answer: str, user_context: UserContext
@@ -430,7 +443,7 @@ class QuizService:
         summary = []
         
         # Ensure fact cache is loaded (might be lazy initialized in tests/prod)
-        if not self.quiz_generator.fact_cache.cache:
+        if not self.quiz_generator.fact_cache.get_topics():
             self.quiz_generator.fact_cache.load()
             
         # Get metadata file modification time for last_updated

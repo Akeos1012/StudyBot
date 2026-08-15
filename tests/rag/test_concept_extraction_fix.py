@@ -10,15 +10,21 @@ def extractor():
 def test_reject_adverb_commonly(extractor):
     text = "Commonly uses Deep Learning models like neural networks"
     concept = extractor.semantic_extractor.extract(text)
-    # The regex Pattern 2 will match "Commonly uses", group 1 is "Commonly"
-    # But _is_canonical_concept should now reject it because it's in ADVERB_STARTS
+    assert concept is None
+
+def test_reject_adverb_usually(extractor):
+    text = "Usually performs classification tasks."
+    concept = extractor.semantic_extractor.extract(text)
+    assert concept is None
+
+def test_reject_adverb_generally(extractor):
+    text = "Generally allows multiple layers of abstraction."
+    concept = extractor.semantic_extractor.extract(text)
     assert concept is None
 
 def test_reject_repeats_until_model(extractor):
     text = "Repeats until model improves"
     concept = extractor.semantic_extractor.extract(text)
-    # The regex Pattern 2 will match because "improves" is a trigger
-    # But _has_valid_concept_structure should now reject it because "until" is present
     assert concept is None
 
 def test_preserve_valid_concepts(extractor):

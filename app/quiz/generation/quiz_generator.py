@@ -64,8 +64,10 @@ from .question_prompt import build_fact_question_prompt
 from ..metadata.question_types import QuestionType
 from ..metadata.question_diversity import select_question_type
 from app.rag.fact_cache import FactCache
+from app.quiz.validation.fact_validator import FactValidator
 from .llm_parser import LLMParser
 from .llm_client import LLMClient
+from .retry_policy import get_failure_type, FailureType
 import traceback
 from app.config import settings
 from app.models.fact_schema import normalize_fact
@@ -73,6 +75,7 @@ from .distractor_selector import DistractorSelector
 import random
 
 from app.utils.performance_profiler import profile_time
+from app.utils.question_id import generate_question_id
 
 from ..validation.question_semantic import (
     validate_semantic,
@@ -342,6 +345,7 @@ class QuizGenerator:
 
         self.parser = LLMParser()
         self.scorer = QuestionScorer()
+        self.fact_validator = FactValidator()
         self.min_quality_score = min_quality_score
         self.distractor_selector = DistractorSelector()
 
@@ -453,6 +457,7 @@ class QuizGenerator:
 
             self._supporting_facts = supporting_facts or []
 
+            # Attempt generation
             question, error_context = self.generate_from_fact(
                 current_fact,
                 answer,
@@ -464,6 +469,13 @@ class QuizGenerator:
             )
             
             print(f"DEBUG: generate_from_fact returned: {question}, error: {error_context}")
+            
+            # Check if this failure is retryable
+            if not question and error_context:
+                failure_type = get_failure_type(error_context)
+                if failure_type == FailureType.NON_RETRYABLE:
+                    print(f"🛑 Deterministic failure (non-retryable): {error_context}. Skipping retries.")
+                    return None
             
             validation_error_context = error_context
 
@@ -842,8 +854,19 @@ class QuizGenerator:
 
         valid_questions = []
         
-        # Process up to 3x requested count for filtering
-        generation_pool = supporting_facts * settings.FACT_MULTIPLIER
+        # Use set of unique facts to avoid redundant retries on the same fact data
+        unique_facts = []
+        seen_fact_ids = set()
+        for fact in supporting_facts:
+            fact_data = normalize_fact(fact)
+            if not fact_data:
+                continue
+            fact_id = fact_data.get("fact_id")
+            if fact_id and fact_id not in seen_fact_ids:
+                unique_facts.append(fact_data)
+                seen_fact_ids.add(fact_id)
+        
+        generation_pool = unique_facts
 
         # Import diversity scorer
         from app.quiz.metadata.question_diversity import calculate_diversity_score
@@ -858,6 +881,13 @@ class QuizGenerator:
 
             # Ensure fact follows the shared schema
             fact_data = normalize_fact(fact_data)
+
+            # --- PRE-VALIDATION ---
+            validation_result = self.fact_validator.validate(fact_data)
+            if not validation_result.valid:
+                logger.warning(f"Fact pre-validation failed: {validation_result.reason}")
+                continue
+            # --- /PRE-VALIDATION ---
 
             if not fact_data:
                 logger.warning("VALIDATION FAILED | Stage: fact_normalization | Reason: Normalized fact is empty")
@@ -1024,6 +1054,9 @@ class QuizGenerator:
 
         if valid_questions:
             print(f"💾 Saving {len(valid_questions)} questions to cache")
+
+            for q in valid_questions:
+                q["question_id"] = generate_question_id(q.get("question", ""))
 
             result = self.cache.add_to_pool(
                 topic=topic,

@@ -90,8 +90,13 @@ function App() {
 
   const isFillBlankCorrect = (questionIndex) => {
     const q = questions[questionIndex];
+    if (!q) return false;
+    
+    const correctAnswer = q.correct || q.correct_text || '';
+    if (!correctAnswer) return false;
+
     const userAnswer = answers[questionIndex] || '';
-    return userAnswer.toLowerCase().trim() === q.correct.toLowerCase().trim();
+    return userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
   };
 
   const resetQuiz = () => {

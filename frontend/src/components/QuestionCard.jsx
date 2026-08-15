@@ -22,11 +22,30 @@ const QuestionCard = ({
 
   const isFillBlank = isFillInBlank(question);
   const userAnswer = answers[index];
-  const correctAnswer = question.correct_text || question.correct;
-  
-  const isCorrect = showResults && (isFillBlank 
-    ? isFillBlankCorrect(index) 
-    : (userAnswer && extractOptionLetter(userAnswer) === extractOptionLetter(String(question.correct))));
+
+  // The backend's canonical answer identity is the option letter.
+  const correctAnswerLetter = extractOptionLetter(
+    String(question.correct || '')
+  );
+
+  const userAnswerLetter = extractOptionLetter(
+    String(userAnswer || '')
+  );
+
+  // correct_text is display-only.
+  const correctAnswerText =
+    question.correct_text ||
+    question.correct ||
+    '';
+
+  const isCorrect = showResults && (
+    isFillBlank
+      ? isFillBlankCorrect(index)
+      : Boolean(
+          userAnswerLetter &&
+          userAnswerLetter === correctAnswerLetter
+        )
+  );
   
   const renderFeedback = () => {
     if (!showResults) return null;
@@ -86,7 +105,7 @@ const QuestionCard = ({
 
       {showResults && !isFillBlank && (
         <div className="sb-correct-answer-banner">
-          Correct answer: {correctAnswer}
+          Correct answer: {correctAnswerText}
         </div>
       )}
 
@@ -104,7 +123,7 @@ const QuestionCard = ({
           {showResults && (
             <div className="sb-fill-feedback">
               <span className="sb-fill-correct-answer">
-                Correct answer: {correctAnswer}
+                Correct answer: {correctAnswerText}
               </span>
             </div>
           )}
@@ -112,10 +131,26 @@ const QuestionCard = ({
       ) : (
         <div className="sb-options-grid">
           {question.options && question.options.map((option, optIndex) => {
-            const isSelected = userAnswer === option;
-            const isCorrectAnswer = showResults && option === correctAnswer;
-            const isWrongAnswer = showResults && isSelected && option !== correctAnswer;
             const letterLabel = String.fromCharCode(65 + optIndex);
+
+            const optionLetter = extractOptionLetter(String(option));
+
+            const isSelected =
+              userAnswer === option;
+
+            const isCorrectAnswer =
+              showResults &&
+              optionLetter === correctAnswerLetter;
+
+            const isWrongAnswer =
+              showResults &&
+              isSelected &&
+              optionLetter !== correctAnswerLetter;
+
+            const isRevealedCorrectAnswer =
+              showResults &&
+              !isSelected &&
+              optionLetter === correctAnswerLetter;
 
             return (
               <button
@@ -123,16 +158,21 @@ const QuestionCard = ({
                 className={`
                   sb-option-btn
                   ${isSelected ? 'sb-option-btn--selected' : ''}
-                  ${showResults && isCorrectAnswer ? 'sb-option-btn--correct' : ''}
-                  ${showResults && isWrongAnswer ? 'sb-option-btn--wrong' : ''}
-                  ${showResults && !isSelected && option === correctAnswer ? 'sb-option-btn--reveal' : ''}
+                  ${isCorrectAnswer ? 'sb-option-btn--correct' : ''}
+                  ${isWrongAnswer ? 'sb-option-btn--wrong' : ''}
+                  ${isRevealedCorrectAnswer ? 'sb-option-btn--reveal' : ''}
                 `}
                 onClick={() => onSelectAnswer(index, option)}
                 disabled={showResults}
                 aria-label={`Option ${letterLabel}: ${option}`}
               >
-                <span className="sb-option-letter">{letterLabel}</span>
-                <span className="sb-option-text">{option.replace(/^[A-D]\s*[\)\.\-\s]/, '')}</span>
+                <span className="sb-option-letter">
+                  {letterLabel}
+                </span>
+
+                <span className="sb-option-text">
+                  {option.replace(/^[A-D]\s*[\)\.\-\s]/, '')}
+                </span>
               </button>
             );
           })}

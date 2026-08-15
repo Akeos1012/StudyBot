@@ -3,6 +3,7 @@ import re
 
 from typing import Any, Dict
 from ..utils.text_normalizer import normalize_supporting_fact
+from ..utils.grounding_helper import get_canonical_grounding_context
 
 from ..utils.options_parser import (
     extract_option_text,
@@ -55,7 +56,11 @@ def validate_grounding(
         return False
 
     # Prefer supporting_fact, fallback to context
-    grounding_context = f"{supporting_fact}\n{context}"
+    grounding_context = get_canonical_grounding_context(question.get("concept", ""), supporting_fact)
+    if not grounding_context:
+        # Fallback to provided context
+        grounding_context = context
+        
     if not grounding_context:
         _log_failure(
             question, "grounding", "No context provided for grounding check", metrics_context=metrics_context

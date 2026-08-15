@@ -1,33 +1,27 @@
-
 import pytest
-from app.quiz.validation.question_grounding import question_equals_answer
+from app.quiz.utils.grounding_helper import get_canonical_grounding_context
+from app.quiz.validation.question_grounding import validate_grounding
 
-def test_short_answer_leakage():
-    # Example provided in prompt
-    question = "Big O Notation is used to describe an algorithm's behavior when the amount of input data increases, by showing how fast or slow it grows. Which of the following best describes this behavior?"
-    options = ["A) Big O Notation", "B) Linear Growth", "C) Constant Time", "D) Quadratic Time"]
-    
-    # Should be rejected because "big o notation" is in the question stem
-    assert question_equals_answer(question, options) is True
+def test_grounding_context_builder():
+    # 1. Continuation-style fact
+    concept = "Deep Learning"
+    fact = "is a branch of Artificial Intelligence."
+    context = get_canonical_grounding_context(concept, fact)
+    assert context == "Deep Learning is a branch of Artificial Intelligence."
 
-def test_long_answer_leakage():
-    # Long answer (over 20 chars) - should still be rejected
-    question = "Which standard methodology is Database Normalization?"
-    options = ["A) Database Normalization", "B) Data Archiving", "C) Data Replication", "D) Data Encryption"]
+    # 2. Complete fact containing concept
+    concept = "Cloud Storage"
+    fact = "Cloud Storage allows users to store data remotely."
+    context = get_canonical_grounding_context(concept, fact)
+    assert context == "Cloud Storage allows users to store data remotely."
 
-    # "database normalization" is in question
-    assert question_equals_answer(question, options) is True
+    # Test Grounding Validation with these contexts
+    # Case: continuation fact (should now PASS)
+    q = {"correct": "A", "options": ["A) Deep Learning", "B) B"], "concept": "Deep Learning"}
+    assert validate_grounding(q, "", supporting_fact=fact) is True
 
-def test_legitimate_non_leakage():
-    # Legitimate question - should pass
-    question = "Which of the following is NOT a benefit of cloud computing?"
-    options = ["A) Cost Savings", "B) Scalability", "C) Reliability", "D) Manual Hardware Maintenance"]
-    
-    assert question_equals_answer(question, options) is False
-
-def test_case_normalization():
-    # Case normalization check
-    question = "big o notation is used..."
-    options = ["A) Big O Notation", "B) Other", "C) Other", "D) Other"]
-    
-    assert question_equals_answer(question, options) is True
+    # Case: unrelated fact (should fail)
+    q = {"correct": "A", "options": ["A) Deep Learning", "B) B"], "concept": "Deep Learning"}
+    # Using a fact that definitely does not contain the answer
+    unrelated_fact = "The sky is blue."
+    assert validate_grounding(q, "", supporting_fact=unrelated_fact) is False

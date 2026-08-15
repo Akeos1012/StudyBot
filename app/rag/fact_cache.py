@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import List, Dict, Any
+from .cache_utils import get_all_notes_hashes
 
 try:
     from .fact_extractor import FactExtractor
@@ -10,13 +11,25 @@ except ImportError:
 from ..models.fact_schema import validate_fact, normalize_fact
 from .fact_cleaner import clean_facts
 
+CACHE_VERSION = "1.0"
 
 class FactCache:
     def __init__(self, notes_path="sample_notes", cache_path="facts_cache.json"):
         self.notes_path = Path(notes_path)
         self.cache_path = Path(cache_path)
-        self.cache = {}
+        self.data = {"version": CACHE_VERSION, "hashes": {}, "facts": {}}
         self.extractor = FactExtractor(notes_path)
+
+    def _is_cache_stale(self, current_hashes: Dict[str, str]) -> bool:
+        """Check if cache is stale based on version or source note hashes."""
+        if self.data.get("version") != CACHE_VERSION:
+            return True
+        
+        cached_hashes = self.data.get("hashes", {})
+        if cached_hashes != current_hashes:
+            return True
+            
+        return False
 
     def validate_fact(self, fact: Dict[str, Any]) -> bool:
         """Validate that a fact has the correct schema using shared schema"""
@@ -26,38 +39,29 @@ class FactCache:
         """Validate all facts in cache and remove invalid ones"""
         removed_count = 0
         normalized_count = 0
+        facts = self.data.get("facts", {})
 
-        for topic in list(self.cache.keys()):
+        for topic in list(facts.keys()):
             valid_facts = []
-            for f in self.cache[topic]:
-                # First try to normalize the fact
+            for f in facts[topic]:
                 normalized = normalize_fact(f)
-                if normalized:
-                    # Validate the normalized fact
-                    if self.validate_fact(normalized):
-                        valid_facts.append(normalized)
-                        if normalized != f:
-                            normalized_count += 1
-                    else:
-                        removed_count += 1
-                        concept = f.get("concept", "unknown")
-                        print(
-                            f"⚠️ Removing invalid fact after normalization: {concept}"
-                        )
+                if normalized and self.validate_fact(normalized):
+                    valid_facts.append(normalized)
+                    if normalized != f:
+                        normalized_count += 1
                 else:
                     removed_count += 1
                     concept = f.get("concept", "unknown")
-                    print(f"⚠️ Removing fact that couldn't be normalized: {concept}")
+                    print(f"⚠️ Removing invalid fact: {concept}")
 
             if valid_facts:
-                self.cache[topic] = valid_facts
+                facts[topic] = valid_facts
             else:
-                del self.cache[topic]
+                del facts[topic]
                 print(f"⚠️ Removing empty topic: {topic}")
 
         if removed_count > 0 or normalized_count > 0:
-            print(f"🗑️ Removed {removed_count} invalid facts")
-            print(f"🔄 Normalized {normalized_count} facts")
+            print(f"🗑️ Removed {removed_count} invalid facts, Normalized {normalized_count} facts")
             self.save_cache()
         else:
             print("✅ All facts validated successfully")
@@ -65,28 +69,44 @@ class FactCache:
         return removed_count
 
     def build(self):
-        print("📂 Building fact cache...")
-
+        print(f"📂 Building fact cache from {self.notes_path}...")
+        current_hashes = get_all_notes_hashes(self.notes_path)
+        
+        # Ensure we look into subdirectories if they represent topics,
+        # or treat all md files in notes_path as belonging to a default topic if structured flatly.
+        # The current extract_all() implementation iterates over subdirectories.
         raw_facts = self.extractor.extract_all()
+        
+        # If no facts found, check if it's because extraction is flat or structured
+        if not raw_facts:
+            # Try flat extraction if no subdirectories found
+            print("⚠️ No topics found via subdirectories, checking flat structure...")
+            # Simple wrapper to extract from all files in the notes path as 'default' topic
+            raw_facts = {"default": self.extractor.extract_facts(
+                "".join([open(f, 'r', encoding='utf-8').read() for f in self.notes_path.glob("*.md")]),
+                "default"
+            )}
 
         cleaned_facts = {
             topic: clean_facts(facts) for topic, facts in raw_facts.items()
         }
 
-        self.cache = cleaned_facts
+        self.data = {
+            "version": CACHE_VERSION,
+            "hashes": current_hashes,
+            "facts": cleaned_facts
+        }
 
         self.validate_cache()
-
         self.save_cache()
-
-        return self.cache
+        return self.data.get("facts", {})
 
     def save_cache(self):
         """Save cache to disk"""
         try:
             with open(self.cache_path, "w", encoding="utf-8") as f:
-                json.dump(self.cache, f, indent=2, ensure_ascii=False)
-            total_facts = sum(len(v) for v in self.cache.values())
+                json.dump(self.data, f, indent=2, ensure_ascii=False)
+            total_facts = sum(len(v) for v in self.data.get("facts", {}).values())
             print(f"✅ Saved {total_facts} facts to {self.cache_path}")
         except Exception as e:
             print(f"⚠️ Could not save cache: {e}")
@@ -96,15 +116,16 @@ class FactCache:
         if self.cache_path.exists():
             try:
                 with open(self.cache_path, "r", encoding="utf-8") as f:
-                    self.cache = json.load(f)
+                    self.data = json.load(f)
 
-                total_facts = sum(len(v) for v in self.cache.values())
-                print(f"✅ Loaded {total_facts} facts from cache")
+                current_hashes = get_all_notes_hashes(self.notes_path)
+                if self._is_cache_stale(current_hashes):
+                    print("⚠️ Cache is stale or version mismatch, rebuilding...")
+                    return self.build()
 
-                # Validate and normalize after loading
+                print(f"✅ Loaded {sum(len(v) for v in self.data.get('facts', {}).values())} facts from cache")
                 self.validate_cache()
-
-                return self.cache
+                return self.data.get("facts", {})
             except Exception as e:
                 print(f"⚠️ Could not load cache: {e}")
                 return self.build()
@@ -114,11 +135,11 @@ class FactCache:
 
     def get_facts(self, topic: str) -> List[Dict[str, Any]]:
         """Get facts for a specific topic"""
-        return self.cache.get(topic, [])
+        return self.data.get("facts", {}).get(topic, [])
 
     def get_topics(self) -> List[str]:
         """Get all available topics"""
-        return list(self.cache.keys())
+        return list(self.data.get("facts", {}).keys())
 
     def refresh(self):
         """Rebuild the cache"""

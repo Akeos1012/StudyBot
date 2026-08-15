@@ -31,7 +31,7 @@ def test_add_to_pool(cache):
         "Cloud Computing",
         "Storage",
         "medium",
-        "multiple",
+        "multiple_choice",
         [question],
     )
 
@@ -39,7 +39,7 @@ def test_add_to_pool(cache):
         "Cloud Computing",
         "Storage",
         "medium",
-        "multiple",
+        "multiple_choice",
     ) == 1
 
 
@@ -64,7 +64,7 @@ def test_get_pool(cache):
         "Cloud Computing",
         "Storage",
         "medium",
-        "multiple",
+        "multiple_choice",
         [question],
     )
 
@@ -72,7 +72,7 @@ def test_get_pool(cache):
         "Cloud Computing",
         "Storage",
         "medium",
-        "multiple",
+        "multiple_choice",
     )
 
     assert len(pool) == 1
